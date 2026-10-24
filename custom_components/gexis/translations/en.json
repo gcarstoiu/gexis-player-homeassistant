@@ -1,0 +1,42 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Add a Gexis Player",
+        "description": "The player's address on the home network, for example livingroom.local, and its port.",
+        "data": {
+          "host": "Address",
+          "port": "Port"
+        }
+      },
+      "zeroconf_confirm": {
+        "title": "Gexis Player found",
+        "description": "Add {name} to Home Assistant?"
+      }
+    },
+    "error": {
+      "cannot_connect": "The player did not answer at this address.",
+      "update_player": "This player is too old for Home Assistant. Update it first: Settings → System → Software update on the player."
+    },
+    "abort": {
+      "already_configured": "This player is already added.",
+      "cannot_connect": "The player did not answer.",
+      "update_player": "This player is too old for Home Assistant. Update it first: Settings → System → Software update on the player.",
+      "not_ipv4_address": "Only players reached over IPv4 can be added."
+    }
+  },
+  "entity": {
+    "switch": {
+      "screen": {
+        "name": "Screen"
+      },
+      "dashboard": {
+        "name": "Dashboard"
+      },
+      "visualiser": {
+        "name": "Visualiser"
+      }
+    }
+  }
+}

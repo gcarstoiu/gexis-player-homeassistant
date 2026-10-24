@@ -1,0 +1,154 @@
+"""A Gexis Player's HTTP API: its live state over a WebSocket, and commands."""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Callable
+import logging
+from typing import Any
+from urllib.parse import urlsplit, urlunsplit
+
+import aiohttp
+
+_LOGGER = logging.getLogger(__name__)
+
+TIMEOUT = aiohttp.ClientTimeout(total=10)
+RETRY_MAX_S = 30
+LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+
+
+class GexisError(Exception):
+    """The player could not be reached, or refused a command."""
+
+
+class TooOld(GexisError):
+    """The player gives no lasting id: an older release, or not a Raspberry Pi."""
+
+
+class GexisPlayer:
+    """One player, reached at `http://host:port`."""
+
+    def __init__(self, session: aiohttp.ClientSession, host: str, port: int) -> None:
+        self.host = host
+        self.port = port
+        self.base = f"http://{host}:{port}"
+        self.status: dict[str, Any] = {}
+        self.state: dict[str, Any] | None = None
+        self.dashboard_set = False
+        self._session = session
+        self._listeners: list[Callable[[], None]] = []
+        self._revision: int | None = None
+
+    @property
+    def connected(self) -> bool:
+        return self.state is not None
+
+    def subscribe(self, listener: Callable[[], None]) -> Callable[[], None]:
+        self._listeners.append(listener)
+        return lambda: self._listeners.remove(listener)
+
+    def _notify(self) -> None:
+        for listener in list(self._listeners):
+            listener()
+
+    async def fetch_status(self) -> dict[str, Any]:
+        """`GET /player/status`: name, lasting id, whether it has a screen."""
+        try:
+            async with self._session.get(f"{self.base}/player/status", timeout=TIMEOUT) as r:
+                r.raise_for_status()
+                status = await r.json(content_type=None)
+        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+            raise GexisError(str(err)) from err
+        if not isinstance(status, dict) or not status.get("id"):
+            raise TooOld
+        self.status = status
+        return status
+
+    async def _fetch_dashboard(self) -> None:
+        try:
+            async with self._session.get(f"{self.base}/panel/dashboard", timeout=TIMEOUT) as r:
+                r.raise_for_status()
+                check = await r.json(content_type=None)
+        except (aiohttp.ClientError, TimeoutError, ValueError):
+            return
+        self.dashboard_set = bool(isinstance(check, dict) and check.get("url"))
+
+    async def _on_state(self, state: dict[str, Any]) -> None:
+        revision = state.get("settings_revision")
+        if revision != self._revision:
+            # A setting changed: the name, headless, the dashboard's address.
+            self._revision = revision
+            try:
+                await self.fetch_status()
+            except GexisError:
+                pass
+            await self._fetch_dashboard()
+        self.state = state
+        self._notify()
+
+    async def listen(self) -> None:
+        """Follow `/state` until cancelled, reconnecting after a drop."""
+        delay = 1
+        while True:
+            try:
+                async with self._session.ws_connect(f"{self.base}/state", heartbeat=30) as ws:
+                    delay = 1
+                    async for msg in ws:
+                        if msg.type == aiohttp.WSMsgType.TEXT:
+                            await self._on_state(msg.json())
+                        elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
+                            break
+            except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+                _LOGGER.debug("%s: %s", self.base, err)
+            if self.state is not None:
+                self.state = None
+                self._revision = None
+                self._notify()
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, RETRY_MAX_S)
+
+    def artwork(self, url: str | None) -> str | None:
+        """An artwork URL Home Assistant can fetch: one on the player's own
+        Lyrion server names the loopback address, which is the player."""
+        if not url:
+            return None
+        if url.startswith("/"):
+            return f"{self.base}{url}"
+        parts = urlsplit(url)
+        if parts.hostname in LOOPBACK:
+            netloc = self.host if parts.port is None else f"{self.host}:{parts.port}"
+            return urlunsplit(parts._replace(netloc=netloc))
+        return url
+
+    async def _post(self, path: str, body: dict[str, Any] | None = None) -> None:
+        try:
+            async with self._session.post(f"{self.base}{path}", json=body, timeout=TIMEOUT) as r:
+                if r.status >= 400:
+                    try:
+                        error = (await r.json(content_type=None)).get("error")
+                    except (ValueError, AttributeError):
+                        error = None
+                    raise GexisError(error or f"HTTP {r.status}")
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise GexisError(str(err)) from err
+
+    async def transport(self, command: str, body: dict[str, Any] | None = None) -> None:
+        await self._post(f"/transport/{command}", body)
+
+    async def set_volume(self, percent: int) -> None:
+        await self._post("/volume", {"percent": percent})
+
+    async def set_mute(self, muted: bool) -> None:
+        await self._post("/volume/mute", {"muted": muted})
+
+    async def activate(self, renderer_id: str) -> None:
+        await self._post(f"/renderer/{renderer_id}/activate")
+
+    async def standby(self, on: bool) -> None:
+        await self._post(f"/panel/standby/{'on' if on else 'off'}")
+
+    async def dashboard(self, show: bool) -> None:
+        await self._post(f"/panel/dashboard/{'show' if show else 'hide'}")
+
+    async def visualiser(self, show: bool) -> None:
+        await self._post(f"/peppy/{'show' if show else 'hide'}")
