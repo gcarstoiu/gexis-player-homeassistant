@@ -9,8 +9,8 @@ Assistant dashboard and the visualiser.
 ## What it needs
 
 - Home Assistant 2026.3 or later.
-- A Gexis Player release newer than 1.4.0. An older player is found, and asked
-  to update first.
+- Gexis Player 1.5.0 or later (on the Testing channel from 24 October 2026).
+  An older player is found, and asked to update first.
 
 ## Installing
 
