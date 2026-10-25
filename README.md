@@ -46,8 +46,18 @@ The switches, buttons and D-pad are unavailable on a player without a screen.
 
 ## The card
 
-*Gexis Player* in the dashboard's card picker, with nothing to install or
-register: it comes with the integration. It shows one player at a time, with
+*Gexis Player* comes with the integration, with nothing to install or
+register. It goes on a dashboard that is edited by hand; Home Assistant's new
+*Overview* takes favourite entities, not cards:
+
+1. *Settings → Dashboards → Add dashboard → New dashboard from scratch*, if
+   there is no such dashboard yet, and open it.
+2. The pencil, then *+* in a section.
+3. The *By card* tab (*By entity* offers only Home Assistant's own cards),
+   and search for *Gexis*.
+4. *Gexis Player*, then *Save* and *Done*.
+
+It shows one player at a time, with
 a switcher to the others; what plays, with the transport and the volume; and,
 on a player with a screen, Home, Now playing, Lyrics and the D-pad. In YAML:
 
