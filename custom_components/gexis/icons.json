@@ -1,0 +1,15 @@
+{
+  "entity": {
+    "button": {
+      "home": {
+        "default": "mdi:home"
+      },
+      "now": {
+        "default": "mdi:music-circle"
+      },
+      "lyrics": {
+        "default": "mdi:text-box-outline"
+      }
+    }
+  }
+}

@@ -10,7 +10,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import GexisError, GexisPlayer
 
-PLATFORMS = [Platform.MEDIA_PLAYER, Platform.SWITCH]
+PLATFORMS = [Platform.BUTTON, Platform.MEDIA_PLAYER, Platform.SWITCH]
 
 type GexisConfigEntry = ConfigEntry[GexisPlayer]
 

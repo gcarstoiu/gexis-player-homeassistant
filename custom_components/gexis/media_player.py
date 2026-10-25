@@ -1,4 +1,4 @@
-"""The player as a media player: what plays, the transport, volume, source."""
+"""The player as a media player: what plays, the transport, volume, the source."""
 
 from __future__ import annotations
 
@@ -68,15 +68,6 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
             return None
         return self.state_dict.get("volume")
 
-    def _activatable(self) -> dict[str, str]:
-        """Source name to renderer id, for the sources that can take over."""
-        capabilities = self.state_dict.get("capabilities") or {}
-        return {
-            s["name"]: s["id"]
-            for s in self.state_dict.get("sources") or []
-            if "activate" in (capabilities.get(s.get("id")) or {}).get("controls", [])
-        }
-
     def _on_change(self) -> None:
         self._follow_position()
         super()._on_change()
@@ -110,8 +101,6 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
                 | MediaPlayerEntityFeature.VOLUME_STEP
                 | MediaPlayerEntityFeature.VOLUME_MUTE
             )
-        if self._activatable():
-            features |= MediaPlayerEntityFeature.SELECT_SOURCE
         return features
 
     @property
@@ -165,14 +154,11 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
 
     @property
     def source(self) -> str | None:
+        """Shown, not chosen: a source is taken over from its own app."""
         active = self.state_dict.get("active")
         if not active:
             return None
         return next((s["name"] for s in self.state_dict.get("sources") or [] if s.get("id") == active), active)
-
-    @property
-    def source_list(self) -> list[str] | None:
-        return sorted(self._activatable()) or None
 
     @property
     def shuffle(self) -> bool | None:
@@ -211,9 +197,3 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
 
     async def async_mute_volume(self, mute: bool) -> None:
         await self._run(self.player.set_mute(mute))
-
-    async def async_select_source(self, source: str) -> None:
-        renderer = self._activatable().get(source)
-        if renderer is None:
-            raise HomeAssistantError(f"{source} cannot be chosen on this player")
-        await self._run(self.player.activate(renderer))

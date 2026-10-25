@@ -27,6 +27,17 @@
     }
   },
   "entity": {
+    "button": {
+      "home": {
+        "name": "Home"
+      },
+      "now": {
+        "name": "Now playing"
+      },
+      "lyrics": {
+        "name": "Lyrics"
+      }
+    },
     "switch": {
       "screen": {
         "name": "Screen"

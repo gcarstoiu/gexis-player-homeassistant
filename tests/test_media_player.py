@@ -35,11 +35,11 @@ async def test_what_plays_and_what_can_be_done(hass: HomeAssistant, aioclient_mo
     assert s.attributes["media_position"] == 30.0
     assert s.attributes[ATTR_MEDIA_VOLUME_LEVEL] == 0.4
     assert s.attributes[ATTR_INPUT_SOURCE] == "Lyrion"
-    assert s.attributes["source_list"] == ["Lyrion", "Spotify"], "Bluetooth cannot be chosen"
+    assert "source_list" not in s.attributes, "a source is taken over from its own app"
     assert s.attributes["shuffle"] is False and s.attributes["repeat"] == "all"
     features = MediaPlayerEntityFeature(s.attributes["supported_features"])
     assert MediaPlayerEntityFeature.PAUSE in features and MediaPlayerEntityFeature.PLAY not in features
-    assert MediaPlayerEntityFeature.VOLUME_SET in features and MediaPlayerEntityFeature.SELECT_SOURCE in features
+    assert MediaPlayerEntityFeature.VOLUME_SET in features and MediaPlayerEntityFeature.SELECT_SOURCE not in features
 
 
 async def test_artwork_on_the_players_own_lyrion_is_fetched_from_the_player(
@@ -66,21 +66,17 @@ async def test_a_track_playing_on_does_not_move_the_position_stamp(
 
 async def test_commands_go_to_the_player(hass: HomeAssistant, aioclient_mock, entry, state, no_socket) -> None:
     await setup(hass, aioclient_mock, entry, state)
-    for path in ("/transport/pause", "/volume", "/renderer/spotify/activate", "/transport/shuffle"):
+    for path in ("/transport/pause", "/volume", "/transport/shuffle"):
         aioclient_mock.post(f"{BASE}{path}", json={})
     await hass.services.async_call("media_player", "media_pause", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
     await hass.services.async_call(
         "media_player", "volume_set", {ATTR_ENTITY_ID: ENTITY, ATTR_MEDIA_VOLUME_LEVEL: 0.55}, blocking=True
-    )
-    await hass.services.async_call(
-        "media_player", "select_source", {ATTR_ENTITY_ID: ENTITY, ATTR_INPUT_SOURCE: "Spotify"}, blocking=True
     )
     await hass.services.async_call("media_player", "shuffle_set", {ATTR_ENTITY_ID: ENTITY, "shuffle": True}, blocking=True)
     posts = [(str(url), body) for method, url, body, _ in aioclient_mock.mock_calls if method == "POST"]
     assert posts == [
         (f"{BASE}/transport/pause", None),
         (f"{BASE}/volume", {"percent": 55}),
-        (f"{BASE}/renderer/spotify/activate", None),
         (f"{BASE}/transport/shuffle", {"on": True}),
     ]
 

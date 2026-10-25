@@ -2,9 +2,10 @@
 
 Each [Gexis Player](https://github.com/gcarstoiu/gexis-player) on the home
 network in Home Assistant, as a media player: what plays, with its artwork;
-play, pause, next and previous; volume and mute; the source. On a player with
-a screen, three switches as well: the screen (display standby), the Home
-Assistant dashboard and the visualiser.
+play, pause, next and previous; volume and mute; the source playing. On a
+player with a screen, three switches as well - the screen (display standby),
+the Home Assistant dashboard and the visualiser - and three buttons: Home,
+Now playing and Lyrics.
 
 ## What it needs
 
@@ -32,12 +33,14 @@ example `livingroom.local`) and port 8090.
 
 | Entity | What it does |
 |---|---|
-| Media player | Playing, paused or idle; title, artist, album, artwork, position. Play, pause, next and previous when the source playing offers them; shuffle and repeat where it has them; volume and mute, unless the output is fixed; the source, chosen from those that can take over. |
+| Media player | Playing, paused or idle; title, artist, album, artwork, position. Play, pause, next and previous when the source playing offers them; shuffle and repeat where it has them; volume and mute, unless the output is fixed; the source playing (each source is taken over from its own app, as on the player). |
 | Screen | On is lit; off is display standby. |
 | Dashboard | Puts the player's Home Assistant dashboard up or takes it down. Unavailable until a dashboard address is set on the player (*Settings → Display → Home Assistant dashboard*). |
 | Visualiser | Shows or hides the visualiser. |
+| Home | Opens Home on the player's screen. |
+| Now playing, Lyrics | Opens Now Playing or the lyrics on the player's screen. Unavailable while no source is active. |
 
-The switches are unavailable on a player without a screen.
+The switches and buttons are unavailable on a player without a screen.
 
 ## Good to know
 

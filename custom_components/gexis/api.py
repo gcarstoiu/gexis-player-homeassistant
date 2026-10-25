@@ -141,8 +141,8 @@ class GexisPlayer:
     async def set_mute(self, muted: bool) -> None:
         await self._post("/volume/mute", {"muted": muted})
 
-    async def activate(self, renderer_id: str) -> None:
-        await self._post(f"/renderer/{renderer_id}/activate")
+    async def go(self, to: str) -> None:
+        await self._post(f"/panel/go/{to}")
 
     async def standby(self, on: bool) -> None:
         await self._post(f"/panel/standby/{'on' if on else 'off'}")
