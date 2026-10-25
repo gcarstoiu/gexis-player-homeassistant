@@ -38,8 +38,37 @@ async def test_what_plays_and_what_can_be_done(hass: HomeAssistant, aioclient_mo
     assert "source_list" not in s.attributes, "a source is taken over from its own app"
     assert s.attributes["shuffle"] is False and s.attributes["repeat"] == "all"
     features = MediaPlayerEntityFeature(s.attributes["supported_features"])
-    assert MediaPlayerEntityFeature.PAUSE in features and MediaPlayerEntityFeature.PLAY not in features
+    assert MediaPlayerEntityFeature.PAUSE in features and MediaPlayerEntityFeature.PLAY in features
     assert MediaPlayerEntityFeature.VOLUME_SET in features and MediaPlayerEntityFeature.SELECT_SOURCE not in features
+    assert s.attributes["available_controls"] == ["next", "pause", "previous", "repeat", "shuffle"]
+
+
+async def test_a_control_the_source_has_stays_while_it_cannot_work(
+    hass: HomeAssistant, aioclient_mock, entry, state, no_socket
+) -> None:
+    """As the player shows it (ADR-0037 §3): Next at the end of the queue."""
+    state["controls"]["available"] = ["pause", "previous", "repeat", "shuffle"]
+    await setup(hass, aioclient_mock, entry, state)
+    s = hass.states.get(ENTITY)
+    assert MediaPlayerEntityFeature.NEXT_TRACK in MediaPlayerEntityFeature(s.attributes["supported_features"])
+    assert "next" not in s.attributes["available_controls"]
+
+
+async def test_a_source_without_shuffle_has_none(hass: HomeAssistant, aioclient_mock, entry, state, no_socket) -> None:
+    state["active"] = "spotify"
+    state["controls"]["available"] = ["next", "pause", "previous"]
+    await setup(hass, aioclient_mock, entry, state)
+    features = MediaPlayerEntityFeature(hass.states.get(ENTITY).attributes["supported_features"])
+    assert MediaPlayerEntityFeature.NEXT_TRACK in features
+    assert MediaPlayerEntityFeature.SHUFFLE_SET not in features and MediaPlayerEntityFeature.REPEAT_SET not in features
+
+
+async def test_nothing_playing_offers_no_transport(hass: HomeAssistant, aioclient_mock, entry, state, no_socket) -> None:
+    state["active"] = None
+    state["controls"]["available"] = []
+    await setup(hass, aioclient_mock, entry, state)
+    features = MediaPlayerEntityFeature(hass.states.get(ENTITY).attributes["supported_features"])
+    assert MediaPlayerEntityFeature.PLAY not in features and MediaPlayerEntityFeature.NEXT_TRACK not in features
 
 
 async def test_artwork_on_the_players_own_lyrion_is_fetched_from_the_player(

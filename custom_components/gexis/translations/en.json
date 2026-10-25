@@ -47,6 +47,9 @@
       },
       "visualiser": {
         "name": "Visualiser"
+      },
+      "idle_screen": {
+        "name": "Idle screen"
       }
     },
     "remote": {

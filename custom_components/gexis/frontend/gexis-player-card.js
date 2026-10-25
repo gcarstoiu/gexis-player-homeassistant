@@ -4,7 +4,7 @@
  * no dependency; drawn from design/source/19 (HA Card.dc.html), the player's
  * look by default. Everything goes through Home Assistant's own services. */
 
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 const FONTS = new URL('fonts/', import.meta.url).href;
 
 /* media_player supported_features */
@@ -51,7 +51,17 @@ const P = {
   right: 'M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z',
   cross: 'M9 2h6v7h7v6h-7v7H9v-7H2V9h7V2zm2 2v7H4v2h7v7h2v-7h7v-2h-7V4h-2z',
   check: 'M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z',
+  meters: 'M10,20H14V4H10V20M4,20H8V12H4V20M16,9V20H20V9H16Z',
+  room: 'M13,3V9H21V3M13,21H21V11H13M3,21H11V15H3M3,13H11V3H3V13Z',
+  idle: 'M2 12A10 10 0 0 0 15 21.54A10 10 0 0 1 15 2.46A10 10 0 0 0 2 12Z',
 };
+/* The screen's views after Home, Now playing and Lyrics, as the phone's Panel
+ * row has them: a switch each, left out while it is unavailable. */
+const VIEWS = [
+  { key: 'visualiser', label: 'Meters', icon: 'meters' },
+  { key: 'dashboard', label: 'Room', icon: 'room' },
+  { key: 'idle_screen', label: 'Idle', icon: 'idle' },
+];
 
 const svg = (d, size, extra = '') =>
   `<svg viewBox="0 0 24 24" width="${size}" height="${size}" ${extra} aria-hidden="true"><path d="${d}" fill="currentColor"></path></svg>`;
@@ -111,11 +121,12 @@ function playerName(hass, id) {
 /* A player's buttons and remote, found through its device (ADR-0163 D4). */
 function siblings(hass, id) {
   const device = hass.entities?.[id]?.device_id;
-  const out = { buttons: {}, remote: null };
+  const out = { buttons: {}, switches: {}, remote: null };
   if (!device) return out;
   for (const e of Object.values(hass.entities)) {
     if (e.device_id !== device || e.platform !== 'gexis' || !hass.states[e.entity_id]) continue;
     if (e.entity_id.startsWith('button.') && ['home', 'now', 'lyrics'].includes(e.translation_key)) out.buttons[e.translation_key] = e.entity_id;
+    else if (e.entity_id.startsWith('switch.') && VIEWS.some((w) => w.key === e.translation_key)) out.switches[e.translation_key] = e.entity_id;
     else if (e.entity_id.startsWith('remote.')) out.remote = e.entity_id;
   }
   return out;
@@ -272,6 +283,8 @@ button[disabled] { cursor: default; }
 .tile { height: 58px; border-radius: 12px; background: var(--gx-fill); flex-direction: column; gap: 3px; min-width: 0; padding: 0 6px; }
 .tile span { font-size: 13px; font-weight: 500; white-space: nowrap; }
 .tile[disabled] { opacity: 0.38; }
+.tile.on, .sq.on { color: var(--gx-accent); background: var(--gx-fill-2); box-shadow: inset 0 0 0 1px var(--gx-accent); }
+.t44[disabled], .t48[disabled] { opacity: 0.38; }
 .dpad { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: end; gap: 8px; padding-top: 4px; }
 .pill { justify-self: start; height: 44px; border-radius: 22px; padding: 0 14px 0 10px; background: var(--gx-fill); gap: 6px; }
 .pill span { font-size: 14px; font-weight: 500; white-space: nowrap; }
@@ -300,7 +313,7 @@ button[disabled] { cursor: default; }
 .c-volume .knob { top: 9px; bottom: 9px; }
 .c-volume .voltext { min-width: 40px; font-size: 13px; }
 .c-fixed { display: flex; align-items: center; gap: 8px; padding: 12px 16px 2px 18px; color: var(--gx-ink-2); font-size: 13px; }
-.c-quick { display: flex; align-items: center; gap: 6px; padding: 10px 12px 12px 12px; }
+.c-quick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 12px 12px 12px; }
 .sq { width: 44px; height: 44px; border-radius: 12px; background: var(--gx-fill); }
 .sq[disabled] { opacity: 0.38; }
 .dpad-btn { height: 44px; border-radius: 12px; padding: 0 14px 0 10px; background: var(--gx-fill); gap: 8px; }
@@ -365,12 +378,13 @@ class GexisPlayerCard extends HTMLElement {
           { value: 'player', label: "The player's look" }, { value: 'home-assistant', label: "Home Assistant's look" }] } } },
       ],
       computeLabel: (s) => ({ entity: 'Player shown first', form: 'Form', look: 'Look' })[s.name],
+      computeHelper: (s) => ({ form: 'Full unless Compact is chosen', look: "The player's look unless Home Assistant's is chosen" })[s.name],
     };
   }
 
   static getStubConfig(hass) {
     const first = playerIds(hass)[0];
-    return first ? { entity: first } : {};
+    return first ? { entity: first, form: 'full', look: 'player' } : { form: 'full', look: 'player' };
   }
 
   setConfig(config) {
@@ -435,6 +449,14 @@ class GexisPlayerCard extends HTMLElement {
     const btn = (k) => sib.buttons[k] && hass.states[sib.buttons[k]];
     const usable = (k) => !!btn(k) && btn(k).state !== 'unavailable';
     const hasButtons = Object.keys(sib.buttons).length > 0;
+    const views = VIEWS.filter((w) => {
+      const s = sib.switches[w.key] && hass.states[sib.switches[w.key]];
+      return s && s.state !== 'unavailable' && s.state !== 'unknown';
+    }).map((w) => ({ ...w, on: hass.states[sib.switches[w.key]].state === 'on' }));
+    /* What the source has is shown; what it cannot do now is disabled, as on
+     * the player (ADR-0037 §3). */
+    const now = Array.isArray(a.available_controls) ? a.available_controls : null;
+    const works = (c) => !now || now.includes(c);
     const remote = sib.remote && hass.states[sib.remote];
     const hasDpad = !!remote && remote.state !== 'unavailable';
     const art = active && kind !== 'bluetooth' && a.entity_picture ? a.entity_picture : null;
@@ -459,8 +481,10 @@ class GexisPlayerCard extends HTMLElement {
       mute: has(F.VOLUME_MUTE),
       muted: !!a.is_volume_muted,
       level: Math.round((Number(a.volume_level) || 0) * 100),
-      screen: hasButtons || hasDpad,
+      prevOk: works('previous'), nextOk: works('next'), shuffleOk: works('shuffle'), repeatOk: works('repeat'),
+      screen: hasButtons || hasDpad || views.length > 0,
       buttons: hasButtons,
+      views,
       dpad: hasDpad,
       sib, usable,
     };
@@ -529,18 +553,18 @@ class GexisPlayerCard extends HTMLElement {
     }
     if (v.prev || v.next || v.playPause) {
       np += `<div class="transport" data-gexis-card="transport">
-        ${v.shuffle ? `<button class="t44 hov" data-act="shuffle" aria-label="Shuffle" aria-pressed="${v.shuffleOn}" style="color:${v.shuffleOn ? 'var(--gx-accent)' : 'var(--gx-ink-2)'}">${svg(P.shuffle, 22)}</button>` : ''}
-        ${v.prev ? `<button class="t48 hov" data-act="prev" aria-label="Previous">${svg(P.prev, 30)}</button>` : ''}
+        ${v.shuffle ? `<button class="t44 hov" data-act="shuffle" aria-label="Shuffle" aria-pressed="${v.shuffleOn}" ${v.shuffleOk ? '' : 'disabled'} style="color:${v.shuffleOn ? 'var(--gx-accent)' : 'var(--gx-ink-2)'}">${svg(P.shuffle, 22)}</button>` : ''}
+        ${v.prev ? `<button class="t48 hov" data-act="prev" aria-label="Previous" ${v.prevOk ? '' : 'disabled'}>${svg(P.prev, 30)}</button>` : ''}
         ${v.playPause ? `<button class="playbtn press" data-act="play" aria-label="${v.playing ? 'Pause' : 'Play'}">${v.playing ? svg(P.pause, 30) : svg(P.play, 32)}</button>` : ''}
-        ${v.next ? `<button class="t48 hov" data-act="next" aria-label="Next">${svg(P.next, 30)}</button>` : ''}
-        ${v.repeat ? `<button class="t44 hov" data-act="repeat" aria-label="Repeat: ${v.repeatMode}" style="color:${v.repeatMode !== 'off' ? 'var(--gx-accent)' : 'var(--gx-ink-2)'}">${this._repeatIcon(v, 22)}</button>` : ''}
+        ${v.next ? `<button class="t48 hov" data-act="next" aria-label="Next" ${v.nextOk ? '' : 'disabled'}>${svg(P.next, 30)}</button>` : ''}
+        ${v.repeat ? `<button class="t44 hov" data-act="repeat" aria-label="Repeat: ${v.repeatMode}" ${v.repeatOk ? '' : 'disabled'} style="color:${v.repeatMode !== 'off' ? 'var(--gx-accent)' : 'var(--gx-ink-2)'}">${this._repeatIcon(v, 22)}</button>` : ''}
       </div>`;
     }
     np += this._volume(v, false);
     let h = `<div class="full"><div class="np" data-gexis-card="now-playing">${np}</div>`;
     if (v.screen) {
       h += `<div class="screen" data-gexis-card="screen"><div class="label">On the player’s screen</div>
-        ${v.buttons ? this._quickTiles(v) : ''}
+        ${v.buttons || v.views.length ? this._quickTiles(v) : ''}
         ${v.dpad ? `<div class="dpad" data-gexis-card="dpad">${this._back()}${this._pad('pad')}<div></div></div>
         ${this._sentText() ? `<div class="sent" aria-live="polite">${esc(this._sentText())}</div>` : ''}` : ''}
       </div>`;
@@ -567,7 +591,10 @@ class GexisPlayerCard extends HTMLElement {
   _quickTiles(v) {
     const tile = (k, label, icon) =>
       `<button class="tile" data-act="go" data-key="${k}" aria-label="${label}" ${v.usable(k) ? '' : 'disabled'}>${svg(icon, 20)}<span>${label}</span></button>`;
-    return `<div class="quick" data-gexis-card="quick-actions">${tile('home', 'Home', P.home)}${tile('now', 'Now playing', P.note)}${tile('lyrics', 'Lyrics', P.lyrics)}</div>`;
+    const view = (w) =>
+      `<button class="tile${w.on ? ' on' : ''}" data-act="view" data-key="${w.key}" aria-label="${w.label}" aria-pressed="${w.on}">${svg(P[w.icon], 20)}<span>${w.label}</span></button>`;
+    const buttons = v.buttons ? `${tile('home', 'Home', P.home)}${tile('now', 'Now playing', P.note)}${tile('lyrics', 'Lyrics', P.lyrics)}` : '';
+    return `<div class="quick" data-gexis-card="quick-actions">${buttons}${v.views.map(view).join('')}</div>`;
   }
 
   _back() {
@@ -588,9 +615,9 @@ class GexisPlayerCard extends HTMLElement {
         <div class="c-meta"><div class="c-title ellip" style="color:${v.active ? 'var(--gx-ink)' : 'var(--gx-ink-2)'}">${esc(v.title)}</div>
         ${v.active && v.artist ? `<div class="sub ellip">${esc(v.artist)}</div>` : ''}</div>
         ${v.prev || v.next || v.playPause ? `<div class="c-transport" data-gexis-card="transport">
-          ${v.prev ? `<button class="t44 hov" data-act="prev" aria-label="Previous">${svg(P.prev, 26)}</button>` : ''}
+          ${v.prev ? `<button class="t44 hov" data-act="prev" aria-label="Previous" ${v.prevOk ? '' : 'disabled'}>${svg(P.prev, 26)}</button>` : ''}
           ${v.playPause ? `<button class="c-play press" data-act="play" aria-label="${v.playing ? 'Pause' : 'Play'}">${v.playing ? svg(P.pause, 26) : svg(P.play, 28)}</button>` : ''}
-          ${v.next ? `<button class="t44 hov" data-act="next" aria-label="Next">${svg(P.next, 26)}</button>` : ''}
+          ${v.next ? `<button class="t44 hov" data-act="next" aria-label="Next" ${v.nextOk ? '' : 'disabled'}>${svg(P.next, 26)}</button>` : ''}
         </div>` : ''}
       </div>`;
     if (v.hasPos) h += `<div class="c-pos" data-gexis-card="position"><div class="bar"><div data-pos-fill style="background:${ink};width:0%"></div></div></div>`;
@@ -599,6 +626,7 @@ class GexisPlayerCard extends HTMLElement {
       const sq = (k, label, icon) => `<button class="sq" data-act="go" data-key="${k}" aria-label="${label}" ${v.usable(k) ? '' : 'disabled'}>${svg(icon, 22)}</button>`;
       h += `<div class="c-quick" data-gexis-card="quick-actions">
         ${v.buttons ? `${sq('home', 'Home', P.home)}${sq('now', 'Now playing', P.note)}${sq('lyrics', 'Lyrics', P.lyrics)}` : ''}
+        ${v.views.map((w) => `<button class="sq${w.on ? ' on' : ''}" data-act="view" data-key="${w.key}" aria-label="${w.label}" aria-pressed="${w.on}">${svg(P[w.icon], 22)}</button>`).join('')}
         <div style="flex:1"></div>
         ${v.dpad ? `<button class="dpad-btn${this._dpadOpen ? ' open' : ''}" data-act="dpad" aria-expanded="${this._dpadOpen}">${svg(P.cross, 22)}<span>D-pad</span>${svg(P.chevron, 18, `style="color:var(--gx-ink-2);transform:rotate(${this._dpadOpen ? 180 : 0}deg);transition:transform 160ms ease"`)}</button>` : ''}
       </div>`;
@@ -696,7 +724,11 @@ class GexisPlayerCard extends HTMLElement {
       const nextMode = { off: 'all', all: 'one', one: 'off' }[v.repeatMode] || 'off';
       this._call('media_player', 'repeat_set', { ...id, repeat: nextMode });
     } else if (act === 'mute') this._call('media_player', 'volume_mute', { ...id, is_volume_muted: !v.muted });
-    else if (act === 'go') {
+    else if (act === 'view') {
+      const sw = v.sib.switches[el.dataset.key];
+      const on = this._hass.states[sw]?.state === 'on';
+      if (sw) this._call('switch', on ? 'turn_off' : 'turn_on', { entity_id: sw });
+    } else if (act === 'go') {
       const button = v.sib.buttons[el.dataset.key];
       if (button) this._call('button', 'press', { entity_id: button });
     } else if (act === 'key') {

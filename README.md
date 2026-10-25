@@ -3,9 +3,9 @@
 Each [Gexis Player](https://github.com/gcarstoiu/gexis-player) on the home
 network in Home Assistant, as a media player: what plays, with its artwork;
 play, pause, next and previous; volume and mute; the source playing. On a
-player with a screen, three switches as well - the screen (display standby),
-the Home Assistant dashboard and the visualiser - three buttons (Home, Now
-playing and Lyrics) and a D-pad. And a card for dashboards, for every
+player with a screen, four switches as well - the screen (display standby),
+the Home Assistant dashboard, the visualiser and the idle screen - three
+buttons (Home, Now playing and Lyrics) and a D-pad. And a card for dashboards, for every
 player in the home.
 
 ## What it needs
@@ -34,10 +34,11 @@ example `livingroom.local`) and port 8090.
 
 | Entity | What it does |
 |---|---|
-| Media player | Playing, paused or idle; title, artist, album, artwork, position. Play, pause, next and previous when the source playing offers them; shuffle and repeat where it has them; volume and mute, unless the output is fixed; the source playing (each source is taken over from its own app, as on the player). |
+| Media player | Playing, paused or idle; title, artist, album, artwork, position. Play, pause, next and previous when the source playing has them; shuffle and repeat where it has them; volume and mute, unless the output is fixed; the source playing (each source is taken over from its own app, as on the player). As on the player, a control the source has stays while it cannot be used (Next on the last track); `available_controls` lists those that work now. |
 | Screen | On is lit; off is display standby. |
 | Dashboard | Puts the player's Home Assistant dashboard up or takes it down. Unavailable until a dashboard address is set on the player (*Settings → Display → Home Assistant dashboard*). |
-| Visualiser | Shows or hides the visualiser. |
+| Visualiser | Shows or hides the visualiser. Unavailable when the output cannot feed the meters. |
+| Idle screen | Puts the idle screen up or takes it down, as the phone's *Idle* does. Unavailable while the idle screen is switched off on the player. |
 | Home | Opens Home on the player's screen. |
 | Now playing, Lyrics | Opens Now Playing or the lyrics on the player's screen. Unavailable while no source is active. |
 | D-pad | A remote for the player's screen: `remote.send_command` with `up`, `down`, `left`, `right`, `ok`, `back` or `home`, with `num_repeats` and `delay_secs`. On while the screen is lit; turning it off or on is the screen's standby. Needs the next Gexis Player release; an older player is asked to update. |
@@ -58,8 +59,11 @@ register. It goes on a dashboard that is edited by hand; Home Assistant's new
 4. *Gexis Player*, then *Save* and *Done*.
 
 It shows one player at a time, with
-a switcher to the others; what plays, with the transport and the volume; and,
-on a player with a screen, Home, Now playing, Lyrics and the D-pad. In YAML:
+a switcher to the others; what plays, with the transport and the volume (a
+control the source cannot use now greyed, as on the player); and, on a player
+with a screen, the phone's views - Home, Now playing, Lyrics, Meters, Room
+(the dashboard) and Idle, each left out where the phone leaves it out - and
+the D-pad. In YAML:
 
 ```yaml
 type: custom:gexis-player-card

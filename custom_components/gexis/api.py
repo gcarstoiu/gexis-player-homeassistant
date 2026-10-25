@@ -163,5 +163,9 @@ class GexisPlayer:
     async def dashboard(self, show: bool) -> None:
         await self._post(f"/panel/dashboard/{'show' if show else 'hide'}")
 
+    async def idle(self, show: bool) -> None:
+        """The idle screen up or down, as the phone's Idle does (ADR-0101)."""
+        await self._post(f"/panel/idle/{'show' if show else 'hide'}")
+
     async def visualiser(self, show: bool) -> None:
         await self._post(f"/peppy/{'show' if show else 'hide'}")

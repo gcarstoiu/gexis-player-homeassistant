@@ -63,6 +63,17 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
         return self.state_dict.get("controls") or {}
 
     @property
+    def _source_controls(self) -> list[str]:
+        """**What the source playing has**, as the player shows it (ADR-0037
+        §3): a control it has but cannot use now (Next at the end of the
+        queue) stays, and `available_controls` says which work now."""
+        active = self.state_dict.get("active")
+        if not active:
+            return []
+        source = (self.state_dict.get("capabilities") or {}).get(active) or {}
+        return source.get("controls") or self._controls.get("available") or []
+
+    @property
     def _volume(self) -> dict[str, Any] | None:
         if self.state_dict.get("fixed_output"):
             return None
@@ -93,7 +104,7 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
     @property
     def supported_features(self) -> MediaPlayerEntityFeature:
         features = MediaPlayerEntityFeature(0)
-        for command in self._controls.get("available") or []:
+        for command in self._source_controls:
             features |= COMMAND_FEATURES.get(command, MediaPlayerEntityFeature(0))
         if self._volume is not None:
             features |= (
@@ -102,6 +113,10 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
                 | MediaPlayerEntityFeature.VOLUME_MUTE
             )
         return features
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"available_controls": sorted(self._controls.get("available") or [])}
 
     @property
     def state(self) -> MediaPlayerState:

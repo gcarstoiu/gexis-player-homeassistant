@@ -1,4 +1,5 @@
-"""The screen, the dashboard and the visualiser, on a player with a screen."""
+"""The screen, the dashboard, the visualiser and the idle screen, on a player
+with a screen."""
 
 from __future__ import annotations
 
@@ -21,6 +22,10 @@ class GexisSwitchDescription(SwitchEntityDescription):
     is_on: Callable[[dict[str, Any]], bool]
     turn: Callable[[GexisPlayer, bool], Awaitable[None]]
     needs_dashboard: bool = False
+    #: Left out where the phone leaves it out: the visualiser on an output
+    #: that cannot feed the meters, the idle screen while it is switched off.
+    needs_meters: bool = False
+    needs_idle: bool = False
 
 
 SWITCHES = (
@@ -42,6 +47,14 @@ SWITCHES = (
         translation_key="visualiser",
         is_on=lambda panel: bool(panel.get("visualiser")),
         turn=lambda player, on: player.visualiser(on),
+        needs_meters=True,
+    ),
+    GexisSwitchDescription(
+        key="idle",
+        translation_key="idle_screen",
+        is_on=lambda panel: bool(panel.get("idle")),
+        turn=lambda player, on: player.idle(on),
+        needs_idle=True,
     ),
 )
 
@@ -61,9 +74,15 @@ class GexisSwitch(GexisEntity, SwitchEntity):
 
     @property
     def available(self) -> bool:
+        description = self.entity_description
         if not super().available or self.player.status.get("screen") is not True:
             return False
-        return self.player.dashboard_set or not self.entity_description.needs_dashboard
+        if description.needs_meters and self.state_dict.get("meters") is False:
+            return False
+        # A player before the field says nothing: the idle screen is offered.
+        if description.needs_idle and self.player.status.get("idle_screen") is False:
+            return False
+        return self.player.dashboard_set or not description.needs_dashboard
 
     @property
     def is_on(self) -> bool:
