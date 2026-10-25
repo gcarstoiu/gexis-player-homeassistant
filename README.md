@@ -11,7 +11,7 @@ player in the home.
 ## What it needs
 
 - Home Assistant 2026.3 or later.
-- Gexis Player 1.5.0 or later (on the Testing channel from 24 October 2026).
+- Gexis Player 1.5.0 or later.
   An older player is found, and asked to update first.
 
 ## Installing
