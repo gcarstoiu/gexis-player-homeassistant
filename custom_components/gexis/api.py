@@ -25,6 +25,11 @@ class TooOld(GexisError):
     """The player gives no lasting id: an older release, or not a Raspberry Pi."""
 
 
+#: ADR-0161 D6: the D-pad's keys, as `POST /panel/key` takes them.
+KEYS = ("up", "down", "left", "right", "ok", "back")
+UPDATE_FOR_KEYS = "This player is too old for the D-pad. Update it first: Settings → System → Software update on the player."
+
+
 class GexisPlayer:
     """One player, reached at `http://host:port`."""
 
@@ -120,9 +125,13 @@ class GexisPlayer:
             return urlunsplit(parts._replace(netloc=netloc))
         return url
 
-    async def _post(self, path: str, body: dict[str, Any] | None = None) -> None:
+    async def _post(self, path: str, body: dict[str, Any] | None = None, missing: str | None = None) -> None:
+        """`missing`: what to say when the player has no such route (404) - a
+        release from before it."""
         try:
             async with self._session.post(f"{self.base}{path}", json=body, timeout=TIMEOUT) as r:
+                if r.status == 404 and missing:
+                    raise GexisError(missing)
                 if r.status >= 400:
                     try:
                         error = (await r.json(content_type=None)).get("error")
@@ -143,6 +152,10 @@ class GexisPlayer:
 
     async def go(self, to: str) -> None:
         await self._post(f"/panel/go/{to}")
+
+    async def key(self, key: str) -> None:
+        """A D-pad key on the player's screen (ADR-0161 D6)."""
+        await self._post("/panel/key", {"key": key}, missing=UPDATE_FOR_KEYS)
 
     async def standby(self, on: bool) -> None:
         await self._post(f"/panel/standby/{'on' if on else 'off'}")

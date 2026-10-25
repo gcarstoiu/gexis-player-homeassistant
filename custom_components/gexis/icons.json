@@ -10,6 +10,11 @@
       "lyrics": {
         "default": "mdi:text-box-outline"
       }
+    },
+    "remote": {
+      "dpad": {
+        "default": "mdi:remote"
+      }
     }
   }
 }

@@ -48,6 +48,11 @@
       "visualiser": {
         "name": "Visualiser"
       }
+    },
+    "remote": {
+      "dpad": {
+        "name": "D-pad"
+      }
     }
   }
 }
