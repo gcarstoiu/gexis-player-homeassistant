@@ -4,7 +4,7 @@
  * no dependency; drawn from design/source/19 (HA Card.dc.html), the player's
  * look by default. Everything goes through Home Assistant's own services. */
 
-const VERSION = '0.4.0';
+const VERSION = '0.4.1';
 const FONTS = new URL('fonts/', import.meta.url).href;
 
 /* media_player supported_features */

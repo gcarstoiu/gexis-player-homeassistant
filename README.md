@@ -11,7 +11,7 @@ player in the home.
 ## What it needs
 
 - Home Assistant 2026.3 or later.
-- Gexis Player 1.5.0 or later.
+- Gexis Player 1.5.0 or later (the D-pad 1.6.0 or later).
   An older player is found, and asked to update first.
 
 ## Installing
@@ -41,7 +41,7 @@ example `livingroom.local`) and port 8090.
 | Idle screen | Puts the idle screen up or takes it down, as the phone's *Idle* does. Unavailable while the idle screen is switched off on the player. |
 | Home | Opens Home on the player's screen. |
 | Now playing, Lyrics | Opens Now Playing or the lyrics on the player's screen. Unavailable while no source is active. |
-| D-pad | A remote for the player's screen: `remote.send_command` with `up`, `down`, `left`, `right`, `ok`, `back` or `home`, with `num_repeats` and `delay_secs`. On while the screen is lit; turning it off or on is the screen's standby. Needs the next Gexis Player release; an older player is asked to update. |
+| D-pad | A remote for the player's screen: `remote.send_command` with `up`, `down`, `left`, `right`, `ok`, `back` or `home`, with `num_repeats` and `delay_secs`. On while the screen is lit; turning it off or on is the screen's standby. Needs Gexis Player 1.6.0 or later; an older player is asked to update. |
 
 The switches, buttons and D-pad are unavailable on a player without a screen.
 
