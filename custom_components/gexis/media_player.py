@@ -32,6 +32,7 @@ COMMAND_FEATURES = {
     "previous": MediaPlayerEntityFeature.PREVIOUS_TRACK,
     "shuffle": MediaPlayerEntityFeature.SHUFFLE_SET,
     "repeat": MediaPlayerEntityFeature.REPEAT_SET,
+    "seek": MediaPlayerEntityFeature.SEEK,
 }
 REPEAT = {"off": RepeatMode.OFF, "all": RepeatMode.ALL, "one": RepeatMode.ONE}
 
@@ -79,6 +80,14 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
             return None
         return self.state_dict.get("volume")
 
+    @property
+    def _fixed_mute(self) -> bool | None:
+        """**Mute with Fixed volume** (ADR-0165): None where the output has no
+        control of its own to silence, or the volume is not Fixed."""
+        if not self.state_dict.get("fixed_output"):
+            return None
+        return self.state_dict.get("fixed_mute")
+
     def _on_change(self) -> None:
         self._follow_position()
         super()._on_change()
@@ -112,6 +121,8 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
                 | MediaPlayerEntityFeature.VOLUME_STEP
                 | MediaPlayerEntityFeature.VOLUME_MUTE
             )
+        elif self._fixed_mute is not None:
+            features |= MediaPlayerEntityFeature.VOLUME_MUTE
         return features
 
     @property
@@ -165,7 +176,9 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
     @property
     def is_volume_muted(self) -> bool | None:
         volume = self._volume
-        return None if not volume else volume.get("muted")
+        if volume:
+            return volume.get("muted")
+        return self._fixed_mute
 
     @property
     def source(self) -> str | None:
@@ -212,3 +225,6 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
 
     async def async_mute_volume(self, mute: bool) -> None:
         await self._run(self.player.set_mute(mute))
+
+    async def async_media_seek(self, position: float) -> None:
+        await self._run(self.player.seek(position))

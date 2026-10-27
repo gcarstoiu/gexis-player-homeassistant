@@ -28,6 +28,7 @@ class TooOld(GexisError):
 #: ADR-0161 D6: the D-pad's keys, as `POST /panel/key` takes them.
 KEYS = ("up", "down", "left", "right", "ok", "back")
 UPDATE_FOR_KEYS = "This player is too old for the D-pad. Update it first: Settings → System → Software update on the player."
+UPDATE_FOR_EQUALISER = "This player is too old for the equaliser. Update it first: Settings → System → Software update on the player."
 
 
 class GexisPlayer:
@@ -126,10 +127,13 @@ class GexisPlayer:
         return url
 
     async def _post(self, path: str, body: dict[str, Any] | None = None, missing: str | None = None) -> None:
+        await self._send("POST", path, body, missing)
+
+    async def _send(self, method: str, path: str, body: dict[str, Any] | None = None, missing: str | None = None) -> None:
         """`missing`: what to say when the player has no such route (404) - a
         release from before it."""
         try:
-            async with self._session.post(f"{self.base}{path}", json=body, timeout=TIMEOUT) as r:
+            async with self._session.request(method, f"{self.base}{path}", json=body, timeout=TIMEOUT) as r:
                 if r.status == 404 and missing:
                     raise GexisError(missing)
                 if r.status >= 400:
@@ -143,6 +147,14 @@ class GexisPlayer:
 
     async def transport(self, command: str, body: dict[str, Any] | None = None) -> None:
         await self._post(f"/transport/{command}", body)
+
+    async def seek(self, position: float) -> None:
+        """To `position` seconds into the track (ADR-0164 C2)."""
+        await self._post("/transport/seek", {"position": position})
+
+    async def set_equaliser(self, changes: dict[str, Any]) -> None:
+        """`on` or `sel`, for the output in use (ADR-0162 D9)."""
+        await self._send("PUT", "/equaliser", changes, missing=UPDATE_FOR_EQUALISER)
 
     async def set_volume(self, percent: int) -> None:
         await self._post("/volume", {"percent": percent})

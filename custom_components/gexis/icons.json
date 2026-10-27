@@ -22,6 +22,14 @@
       },
       "idle_screen": {
         "default": "mdi:weather-night"
+      },
+      "equaliser": {
+        "default": "mdi:tune-vertical"
+      }
+    },
+    "select": {
+      "equaliser_setting": {
+        "default": "mdi:tune-vertical-variant"
       }
     }
   }

@@ -42,3 +42,11 @@ def test_the_card_and_its_fonts_are_there() -> None:
         assert font in card
     version = json.loads((FRONTEND.parent / "manifest.json").read_text())["version"]
     assert f"const VERSION = '{version}'" in card, "the card's version follows the manifest's"
+
+
+def test_the_card_waits_for_home_assistants_registry() -> None:
+    """ADR-0163 C7: defined once the scoped element registry is in place, and
+    again after, so the Home Assistant app does not lose the definition."""
+    card = (FRONTEND / CARD_FILE).read_text()
+    assert "window.CustomElementRegistryPolyfill" in card
+    assert "class extends GexisPlayerCard {}" in card

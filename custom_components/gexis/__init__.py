@@ -16,7 +16,7 @@ from homeassistant.loader import async_get_integration
 from .api import GexisError, GexisPlayer
 from .const import CARD_FILE, DOMAIN, FRONTEND_URL
 
-PLATFORMS = [Platform.BUTTON, Platform.MEDIA_PLAYER, Platform.REMOTE, Platform.SWITCH]
+PLATFORMS = [Platform.BUTTON, Platform.MEDIA_PLAYER, Platform.REMOTE, Platform.SELECT, Platform.SWITCH]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 type GexisConfigEntry = ConfigEntry[GexisPlayer]

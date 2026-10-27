@@ -50,11 +50,19 @@
       },
       "idle_screen": {
         "name": "Idle screen"
+      },
+      "equaliser": {
+        "name": "Equaliser"
       }
     },
     "remote": {
       "dpad": {
         "name": "D-pad"
+      }
+    },
+    "select": {
+      "equaliser_setting": {
+        "name": "Equaliser setting"
       }
     }
   }

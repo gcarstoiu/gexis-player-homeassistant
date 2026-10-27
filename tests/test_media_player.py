@@ -118,6 +118,55 @@ async def test_a_fixed_output_offers_no_volume(hass: HomeAssistant, aioclient_mo
     assert MediaPlayerEntityFeature.VOLUME_SET not in MediaPlayerEntityFeature(s.attributes["supported_features"])
 
 
+async def test_a_fixed_output_with_a_control_mutes(hass: HomeAssistant, aioclient_mock, entry, state, no_socket) -> None:
+    """ADR-0165: mute with Fixed volume where the output has a control."""
+    state["fixed_output"] = True
+    state["fixed_mute"] = False
+    player = await setup(hass, aioclient_mock, entry, state)
+    s = hass.states.get(ENTITY)
+    features = MediaPlayerEntityFeature(s.attributes["supported_features"])
+    assert MediaPlayerEntityFeature.VOLUME_MUTE in features
+    assert MediaPlayerEntityFeature.VOLUME_SET not in features
+    assert s.attributes["is_volume_muted"] is False
+    aioclient_mock.post(f"{BASE}/volume/mute", json={})
+    await hass.services.async_call(
+        "media_player", "volume_mute", {ATTR_ENTITY_ID: ENTITY, "is_volume_muted": True}, blocking=True
+    )
+    posts = [(str(url), body) for method, url, body, _ in aioclient_mock.mock_calls if method == "POST"]
+    assert posts == [(f"{BASE}/volume/mute", {"muted": True})]
+    state["fixed_mute"] = True
+    await player._on_state(state)
+    assert hass.states.get(ENTITY).attributes["is_volume_muted"] is True
+
+
+async def test_a_fixed_output_without_a_control_has_no_mute(
+    hass: HomeAssistant, aioclient_mock, entry, state, no_socket
+) -> None:
+    state["fixed_output"] = True
+    state["fixed_mute"] = None
+    await setup(hass, aioclient_mock, entry, state)
+    features = MediaPlayerEntityFeature(hass.states.get(ENTITY).attributes["supported_features"])
+    assert MediaPlayerEntityFeature.VOLUME_MUTE not in features
+
+
+async def test_a_source_that_seeks_is_sought(hass: HomeAssistant, aioclient_mock, entry, state, no_socket) -> None:
+    """ADR-0164 C2: seeking where the source declares it."""
+    state["capabilities"]["lms"]["controls"].append("seek")
+    await setup(hass, aioclient_mock, entry, state)
+    features = MediaPlayerEntityFeature(hass.states.get(ENTITY).attributes["supported_features"])
+    assert MediaPlayerEntityFeature.SEEK in features
+    aioclient_mock.post(f"{BASE}/transport/seek", json={})
+    await hass.services.async_call("media_player", "media_seek", {ATTR_ENTITY_ID: ENTITY, "seek_position": 95.5}, blocking=True)
+    posts = [(str(url), body) for method, url, body, _ in aioclient_mock.mock_calls if method == "POST"]
+    assert posts == [(f"{BASE}/transport/seek", {"position": 95.5})]
+
+
+async def test_a_source_that_does_not_seek_is_not(hass: HomeAssistant, aioclient_mock, entry, state, no_socket) -> None:
+    await setup(hass, aioclient_mock, entry, state)
+    features = MediaPlayerEntityFeature(hass.states.get(ENTITY).attributes["supported_features"])
+    assert MediaPlayerEntityFeature.SEEK not in features
+
+
 async def test_nothing_active_is_idle(hass: HomeAssistant, aioclient_mock, entry, state, no_socket) -> None:
     state["active"] = None
     state["metadata"] = {}

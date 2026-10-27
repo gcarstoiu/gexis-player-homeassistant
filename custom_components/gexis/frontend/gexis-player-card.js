@@ -1,16 +1,19 @@
 /* Gexis Player card for Home Assistant dashboards (ADR-0163): every Gexis
  * player in the home, what it plays, its transport and volume, and on a
  * player with a screen the quick actions and the D-pad. One file, no build,
- * no dependency; drawn from design/source/19 (HA Card.dc.html), the player's
- * look by default. Everything goes through Home Assistant's own services. */
+ * no dependency. The full form is the phone's remote (ADR-0164,
+ * design/source/21) without its Remote / Settings switch, the D-pad alone in
+ * the touch area (ADR-0163 15-17); the compact form is design/source/19's.
+ * The player's look by default. Everything goes through Home Assistant's own
+ * services. */
 
-const VERSION = '0.4.1';
+const VERSION = '0.5.0';
 const FONTS = new URL('fonts/', import.meta.url).href;
 
 /* media_player supported_features */
 const F = {
-  PAUSE: 1, VOLUME_SET: 4, VOLUME_MUTE: 8, PREVIOUS_TRACK: 16, NEXT_TRACK: 32,
-  PLAY: 16384, SHUFFLE_SET: 32768, REPEAT_SET: 262144,
+  PAUSE: 1, SEEK: 2, VOLUME_SET: 4, VOLUME_MUTE: 8, PREVIOUS_TRACK: 16, NEXT_TRACK: 32,
+  PLAY: 16384,
 };
 
 const SOURCES = {
@@ -32,13 +35,10 @@ const P = {
   chevron: 'M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z',
   alert: 'M11,15H13V17H11V15M11,7H13V13H11V7M12,2C6.47,2 2,6.5 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z',
   note: 'M12 3V13.55C11.41 13.21 10.73 13 10 13C7.79 13 6 14.79 6 17S7.79 21 10 21 14 19.21 14 17V7H18V3H12Z',
-  shuffle: 'M17,3L22.25,7.5L17,12L22.25,16.5L17,21V18H14.26L11.44,15.18L13.56,13.06L15.5,15H17V12L17,9H15.5L6.5,18H2V15H5.26L14.26,6H17V3M2,6H6.5L9.32,8.82L7.2,10.94L5.26,9H2V6Z',
   prev: 'M6,18V6H8V18H6M9.5,12L18,6V18L9.5,12Z',
   pause: 'M14,19H18V5H14M6,19H10V5H6V19Z',
   play: 'M8,5.14V19.14L19,12.14L8,5.14Z',
   next: 'M16,18H18V6H16M6,18L14.5,12L6,6V18Z',
-  repeat: 'M17,17H7V14L3,18L7,22V19H19V13H17M7,7H17V10L21,6L17,2V5H5V11H7V7Z',
-  repeatOnce: 'M13,15V9H12L10,10V11H11.5V15M17,17H7V14L3,18L7,22V19H19V13H17M7,7H17V10L21,6L17,2V5H5V11H7V7Z',
   volume: 'M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M3,9V15H7L12,20V4L7,9H3Z',
   muted: 'M12,4L9.91,6.09L12,8.18M4.27,3L3,4.27L7.73,9H3V15H7L12,20V13.27L16.25,17.53C15.58,18.04 14.83,18.46 14,18.7V20.77C15.38,20.45 16.63,19.82 17.68,18.96L19.73,21L21,19.73L12,10.73M19,12C19,12.94 18.8,13.82 18.46,14.64L19.97,16.15C20.62,14.91 21,13.5 21,12C21,7.72 18,4.14 14,3.23V5.29C16.89,6.15 19,8.83 19,12M16.5,12C16.5,10.23 15.5,8.71 14,7.97V10.18L16.45,12.63C16.5,12.43 16.5,12.21 16.5,12Z',
   lock: 'M12,17A2,2 0 0,0 14,15C14,13.89 13.1,13 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V10C4,8.89 4.9,8 6,8H7V6A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,3A3,3 0 0,0 9,6V8H15V6A3,3 0 0,0 12,3Z',
@@ -62,6 +62,20 @@ const VIEWS = [
   { key: 'dashboard', label: 'Room', icon: 'room' },
   { key: 'idle_screen', label: 'Idle', icon: 'idle' },
 ];
+
+/* The remote's stroked glyphs (ui/src/screens/remote/icons.js). */
+const S = {
+  home: 'M4 11.5 12 5l8 6.5M6.5 10v9h11v-9',
+  lyrics: 'M5 7h14M5 12h9M5 17h11',
+  meters: 'M5 19V11M10 19V5M15 19V9M20 19V13',
+  playing: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM10.5 9v6l4.5-3z',
+  room: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z',
+  idle: 'M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM12 7.5V12l3 2',
+  standby: 'M19.5 14.6A8 8 0 1 1 9.4 4.5a6.4 6.4 0 0 0 10.1 10.1z',
+};
+const stroke = (d, size = 22) =>
+  `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+const EQ_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 4v16M12 4v16M18 4v16"></path><circle class="rm-eqdot" cx="6" cy="14" r="2.6"></circle><circle class="rm-eqdot" cx="12" cy="8" r="2.6"></circle><circle class="rm-eqdot" cx="18" cy="12" r="2.6"></circle></svg>';
 
 const svg = (d, size, extra = '') =>
   `<svg viewBox="0 0 24 24" width="${size}" height="${size}" ${extra} aria-hidden="true"><path d="${d}" fill="currentColor"></path></svg>`;
@@ -121,12 +135,13 @@ function playerName(hass, id) {
 /* A player's buttons and remote, found through its device (ADR-0163 D4). */
 function siblings(hass, id) {
   const device = hass.entities?.[id]?.device_id;
-  const out = { buttons: {}, switches: {}, remote: null };
+  const out = { buttons: {}, switches: {}, remote: null, select: null };
   if (!device) return out;
   for (const e of Object.values(hass.entities)) {
     if (e.device_id !== device || e.platform !== 'gexis' || !hass.states[e.entity_id]) continue;
     if (e.entity_id.startsWith('button.') && ['home', 'now', 'lyrics'].includes(e.translation_key)) out.buttons[e.translation_key] = e.entity_id;
-    else if (e.entity_id.startsWith('switch.') && VIEWS.some((w) => w.key === e.translation_key)) out.switches[e.translation_key] = e.entity_id;
+    else if (e.entity_id.startsWith('switch.') && (VIEWS.some((w) => w.key === e.translation_key) || ['screen', 'equaliser'].includes(e.translation_key))) out.switches[e.translation_key] = e.entity_id;
+    else if (e.entity_id.startsWith('select.') && e.translation_key === 'equaliser_setting') out.select = e.entity_id;
     else if (e.entity_id.startsWith('remote.')) out.remote = e.entity_id;
   }
   return out;
@@ -174,6 +189,19 @@ const STYLE = `
   --gexis-source-spotify: #8fd9a8;
   --gexis-source-bluetooth: #9fb4e8;
   --gexis-source-plexamp: rgba(233,238,242,0.8);
+  --gexis-card-remote-ground: #101a21;
+  --gexis-card-button: rgba(233,238,242,0.07);
+  --gexis-card-button-line: rgba(233,238,242,0.1);
+  --gexis-card-select: rgba(126,214,188,0.16);
+  --gexis-card-select-line: rgba(126,214,188,0.55);
+  --gexis-card-touch: rgba(233,238,242,0.04);
+  --gexis-card-touch-line: rgba(233,238,242,0.12);
+  --gexis-card-skip: rgba(233,238,242,0.09);
+  --gexis-card-on-volume: #0d151c;
+  --gexis-card-sheet: #16232c;
+  --gexis-card-scrim: rgba(4,8,10,0.55);
+  --gexis-card-warn: #e0a758;
+  --gexis-card-play-glow: 0 0 22px rgba(242,164,143,0.22),0 12px 30px rgba(242,164,143,0.35);
 }
 .root {
   --gx-bg: var(--gexis-card-background,var(--ha-card-background,var(--card-background-color,#fff)));
@@ -203,6 +231,19 @@ const STYLE = `
   --gx-src-spotify: var(--gexis-source-spotify,oklch(0.52 0.12 150));
   --gx-src-bluetooth: var(--gexis-source-bluetooth,oklch(0.5 0.12 272));
   --gx-src-plexamp: var(--gexis-source-plexamp,var(--secondary-text-color,#727272));
+  --gx-rm-ground: var(--gexis-card-remote-ground,var(--gx-bg));
+  --gx-button: var(--gexis-card-button,rgba(127,127,127,0.1));
+  --gx-button-line: var(--gexis-card-button-line,rgba(127,127,127,0.18));
+  --gx-select: var(--gexis-card-select,color-mix(in srgb,var(--primary-color,#009ac7) 16%,transparent));
+  --gx-select-line: var(--gexis-card-select-line,color-mix(in srgb,var(--primary-color,#009ac7) 55%,transparent));
+  --gx-touch: var(--gexis-card-touch,rgba(127,127,127,0.06));
+  --gx-touch-line: var(--gexis-card-touch-line,rgba(127,127,127,0.2));
+  --gx-skip: var(--gexis-card-skip,rgba(127,127,127,0.12));
+  --gx-on-vol: var(--gexis-card-on-volume,var(--text-primary-color,#fff));
+  --gx-sheet: var(--gexis-card-sheet,var(--gx-menu));
+  --gx-scrim: var(--gexis-card-scrim,rgba(0,0,0,0.4));
+  --gx-warn: var(--gexis-card-warn,var(--warning-color,#ffa600));
+  --gx-play-glow: var(--gexis-card-play-glow,none);
   container-type: inline-size;
   position: relative; box-sizing: border-box; width: 100%;
   background: var(--gx-bg); color: var(--gx-ink);
@@ -219,7 +260,7 @@ button:focus-visible, .vol:focus-visible { outline: 2px solid var(--gx-accent); 
 button[disabled] { cursor: default; }
 @media (hover: hover) {
   .hov:not([disabled]):hover { background: var(--gx-fill); }
-  .tile:not([disabled]):hover, .pill:hover, .dpad-btn:hover { background: var(--gx-fill-2); }
+  .pill:hover, .dpad-btn:hover { background: var(--gx-fill-2); }
 }
 .press:active { transform: scale(0.95); }
 .dir:active { background: var(--gx-fill-2); }
@@ -251,44 +292,20 @@ button[disabled] { cursor: default; }
 .unreachable .t { font-size: 16px; font-weight: 500; }
 .unreachable .n { color: var(--gx-ink-2); text-wrap: pretty; }
 
-.full { position: relative; display: flex; flex-wrap: wrap; }
-.np { flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; box-shadow: -1px -1px 0 0 var(--gx-line); }
-.what { display: flex; gap: 16px; padding: 12px 16px 0; align-items: flex-start; }
-.well { position: relative; width: clamp(96px,28cqi,128px); aspect-ratio: 1; flex-shrink: 0; border-radius: 10px; overflow: hidden;
-  background: var(--gx-fill); display: flex; align-items: center; justify-content: center; }
-.well > img.art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.well-mark { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; }
-.meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding-top: 2px; }
-.title { font-size: 18px; font-weight: 500; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .sub { font-size: 14px; color: var(--gx-ink-2); }
-.pos { padding: 14px 16px 0; display: flex; flex-direction: column; gap: 6px; }
 .bar { position: relative; height: 4px; border-radius: 2px; background: var(--gx-fill-2); overflow: hidden; }
 .bar > div { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; }
-.times { display: flex; justify-content: space-between; font-size: 12px; color: var(--gx-ink-2); font-variant-numeric: tabular-nums; }
-.transport { display: flex; align-items: center; justify-content: center; gap: clamp(6px,3cqi,22px); padding: 6px 16px 2px; }
 .t44 { width: 44px; height: 44px; border-radius: 50%; }
-.t48 { width: 48px; height: 48px; border-radius: 50%; }
-.playbtn { width: 56px; height: 56px; border-radius: 50%; background: var(--gx-play); color: var(--gx-on-play); }
-.volume { display: flex; align-items: center; gap: 8px; padding: 8px 16px 14px 10px; }
 .vol { position: relative; flex: 1; min-width: 0; height: 40px; border-radius: 12px; background: var(--gx-vol-track); overflow: hidden; cursor: pointer; touch-action: none; }
 .vol .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gx-vol); }
 .vol .knob { position: absolute; top: 12px; bottom: 12px; width: 4px; border-radius: 2px; background: var(--gx-on-play); }
 .voltext { min-width: 44px; text-align: right; font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--gx-ink-2); }
-.fixed { display: flex; align-items: center; gap: 10px; padding: 10px 16px 16px 20px; color: var(--gx-ink-2); font-size: 13px; }
-.fixed svg { flex-shrink: 0; }
 
-.screen { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 18px; box-shadow: -1px -1px 0 0 var(--gx-line); }
 .label { font-family: var(--gx-label-font); font-size: var(--gx-label-size); font-weight: 500; letter-spacing: var(--gx-label-track); text-transform: var(--gx-label-case); color: var(--gx-ink-2); }
-.quick { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
-.tile { height: 58px; border-radius: 12px; background: var(--gx-fill); flex-direction: column; gap: 3px; min-width: 0; padding: 0 6px; }
-.tile span { font-size: 13px; font-weight: 500; white-space: nowrap; }
-.tile[disabled] { opacity: 0.38; }
-.tile.on, .sq.on { color: var(--gx-accent); background: var(--gx-fill-2); box-shadow: inset 0 0 0 1px var(--gx-accent); }
-.t44[disabled], .t48[disabled] { opacity: 0.38; }
-.dpad { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: end; gap: 8px; padding-top: 4px; }
+.sq.on { color: var(--gx-accent); background: var(--gx-fill-2); box-shadow: inset 0 0 0 1px var(--gx-accent); }
+.t44[disabled] { opacity: 0.38; }
 .pill { justify-self: start; height: 44px; border-radius: 22px; padding: 0 14px 0 10px; background: var(--gx-fill); gap: 6px; }
 .pill span { font-size: 14px; font-weight: 500; white-space: nowrap; }
-.pad { position: relative; width: clamp(168px,44cqi,216px); aspect-ratio: 1; border-radius: 50%; background: var(--gx-fill); }
 .dir { position: absolute; border-radius: 14px; }
 .dir.up { left: 32%; top: 3%; width: 36%; height: 28%; }
 .dir.down { left: 32%; bottom: 3%; width: 36%; height: 28%; }
@@ -296,7 +313,6 @@ button[disabled] { cursor: default; }
 .dir.right { top: 32%; right: 3%; height: 36%; width: 28%; }
 .ok { position: absolute; left: 33%; top: 33%; width: 34%; height: 34%; border-radius: 50%; background: var(--gx-bg); box-shadow: 0 0 0 1px var(--gx-line);
   font-size: 15px; font-weight: 500; letter-spacing: 0.04em; }
-.sent { text-align: center; font-size: 12px; color: var(--gx-ink-2); margin-top: -4px; }
 
 .c-np { position: relative; display: flex; flex-direction: column; }
 .c-what { display: flex; align-items: center; gap: 12px; padding: 8px 12px 0 16px; }
@@ -336,6 +352,157 @@ button[disabled] { cursor: default; }
 .menu .who .n { display: block; font-size: 15px; font-weight: 500; }
 .menu .who .s { display: block; font-size: 13px; color: var(--gx-ink-2); }
 .menu .tick { color: var(--gx-accent); flex-shrink: 0; }
+
+/* ---- The full form: the phone's remote (ADR-0163 15-17; the sizes are
+ * ui/src/screens/remote's). ---- */
+.root.rm { max-width: 440px; margin: 0 auto; background: var(--gx-rm-ground); }
+.rm-bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.rm-weave { position: absolute; inset: -90px; background: repeating-linear-gradient(38deg,#3f5a6d 0 48px,#2e4453 48px 96px); filter: blur(70px); transform: scale(1.14); }
+.rm-blur { position: absolute; inset: -120px; width: calc(100% + 240px); height: calc(100% + 240px); object-fit: cover; filter: blur(72px) saturate(1.7); transform: scale(1.12); }
+.rm-veil { position: absolute; inset: 0; background: radial-gradient(130% 105% at 20% 42%,rgba(22,36,46,0.3),rgba(14,23,30,0.86)); }
+.rm-top { position: relative; padding: 10px 16px 12px; }
+.rm-picker { width: 100%; height: 54px; border-radius: 16px; background: var(--gx-touch); box-shadow: inset 0 0 0 1px var(--gx-button-line);
+  justify-content: flex-start; gap: 10px; padding: 0 8px 0 10px; }
+.rm-picker[disabled] { cursor: default; }
+.rm-picker img { width: 30px; height: 30px; display: block; flex-shrink: 0; }
+.rm-pt { flex: 1; min-width: 0; display: flex; flex-direction: column; text-align: left; }
+.rm-pn { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rm-ps { font-size: 12px; color: var(--gx-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rm-chev { flex-shrink: 0; color: var(--gx-ink-2); transition: transform 160ms ease; }
+.rm-chev.open { transform: rotate(180deg); }
+.rm-page { position: relative; padding: 0 16px 16px; display: flex; flex-direction: column; }
+.rm-now { display: flex; gap: 16px; }
+.rm-now .rm-cover { width: 136px; min-width: 96px; flex-shrink: 1; align-self: flex-start; }
+.rm-side { flex: 1 0 168px; min-width: 168px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; padding: 2px 0; }
+.rm-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.rm-title { font-size: 20px; font-weight: 700; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.rm-title.none { color: var(--gx-ink-2); }
+.rm-artist { font-size: 15px; color: var(--gx-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rm-cover { position: relative; aspect-ratio: 1; border-radius: 18px; overflow: hidden; background: var(--gx-button); display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.4); color: var(--gx-ink-2); }
+.rm-cover.big { border-radius: 24px; box-shadow: 0 18px 48px rgba(0,0,0,0.5); }
+.rm-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.rm-edge { position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); pointer-events: none; }
+.rm-pending { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  background: linear-gradient(160deg,rgba(126,214,188,0.07),rgba(242,164,143,0.06)),var(--gx-sheet); }
+.rm-ring { width: 48px; height: 48px; border-radius: 50%; border: 2px solid rgba(126,214,188,0.4); box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
+.rm-dot { width: 12px; height: 12px; border-radius: 50%; background: rgba(126,214,188,0.45); }
+.rm-pl { font-family: var(--gx-label-font); font-size: 10px; letter-spacing: 0.12em; color: var(--gx-ink-2); text-transform: uppercase; white-space: nowrap; }
+.rm-cover.big .rm-pending { gap: 20px; }
+.rm-cover.big .rm-ring { width: 110px; height: 110px; }
+.rm-cover.big .rm-dot { width: 26px; height: 26px; }
+.rm-cover.big .rm-pl { font-size: 13px; letter-spacing: 0.16em; }
+.rm-transport { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.rm-transport.big { gap: 24px; margin-top: 10px; }
+.rm-transport.idle { opacity: 0.38; }
+.rm-transport.idle button[disabled] { opacity: 1; }
+.rm-skip { width: 44px; height: 44px; border-radius: 50%; background: var(--gx-skip); color: var(--gx-ink); }
+.rm-transport.big .rm-skip { width: 64px; height: 64px; }
+.rm-play { width: 56px; height: 56px; border-radius: 50%; background: var(--gx-play); color: var(--gx-on-play); box-shadow: var(--gx-play-glow); }
+.rm-transport.big .rm-play { width: 84px; height: 84px; }
+.rm-skip[disabled] { opacity: 0.38; }
+.rm-skip:not([disabled]):active, .rm-play:not([disabled]):active { transform: scale(0.95); }
+.rm-progress { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.rm-progress.idle { opacity: 0.38; }
+.rm-pbar { position: relative; height: 4px; border-radius: 2px; overflow: hidden; background: rgba(127,127,127,0.25); }
+.rm-pbar.live, .rm-strack.live { background: linear-gradient(90deg,rgba(127,127,127,0),rgba(127,127,127,0.3) 16%,rgba(127,127,127,0.3) 84%,rgba(127,127,127,0)); }
+.rm-pfill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gx-accent); }
+.rm-times { display: flex; justify-content: space-between; font-family: var(--gx-label-font); font-size: 12px; line-height: 16px; color: var(--gx-ink-2); font-variant-numeric: tabular-nums; }
+.rm-area { margin-top: 12px; height: 300px; display: flex; }
+.rm-pad { position: relative; flex: 1; min-width: 0; border-radius: 26px; background: var(--gx-touch); box-shadow: inset 0 0 0 1px var(--gx-touch-line); overflow: hidden; }
+.rm-dpad { position: absolute; left: 50%; top: 50%; width: min(216px,62cqi); aspect-ratio: 1; transform: translate(-50%,-50%); border-radius: 50%;
+  background: var(--gx-button); box-shadow: inset 0 0 0 1px var(--gx-touch-line); }
+.rm-arrow { position: absolute; border-radius: 14px; color: var(--gx-ink); }
+.rm-arrow:active { background: var(--gx-select); }
+.rm-arrow.up { left: 32%; top: 3%; width: 36%; height: 28%; }
+.rm-arrow.down { left: 32%; bottom: 3%; width: 36%; height: 28%; }
+.rm-arrow.left { top: 32%; left: 3%; width: 28%; height: 36%; }
+.rm-arrow.right { top: 32%; right: 3%; width: 28%; height: 36%; }
+.rm-ok { position: absolute; left: 32%; top: 32%; width: 36%; height: 36%; border-radius: 50%; background: var(--gx-button); box-shadow: inset 0 0 0 1px var(--gx-button-line);
+  color: var(--gx-ink); font-size: 16px; font-weight: 700; letter-spacing: 0.04em; }
+.rm-ok:active { transform: scale(0.95); }
+.rm-corner { position: absolute; width: 48px; height: 48px; border-radius: 50%; background: var(--gx-button); box-shadow: inset 0 0 0 1px var(--gx-button-line); color: var(--gx-ink); }
+.rm-corner:not([disabled]):active { transform: scale(0.94); }
+.rm-corner.on { color: var(--gx-accent); }
+.rm-corner[disabled] { opacity: 0.38; }
+.rm-corner.tl { left: 10px; top: 10px; } .rm-corner.tr { right: 10px; top: 10px; }
+.rm-corner.bl { left: 10px; bottom: 10px; } .rm-corner.br { right: 10px; bottom: 10px; }
+.rm-actions { display: flex; gap: 8px; margin-top: 12px; }
+.rm-gap { flex: 1; }
+.rm-act { width: 56px; height: 56px; border-radius: 18px; background: var(--gx-button); box-shadow: inset 0 0 0 1px var(--gx-button-line); color: var(--gx-ink); }
+.rm-act:not([disabled]):active { transform: scale(0.97); }
+.rm-act.on { background: var(--gx-select); box-shadow: inset 0 0 0 1px var(--gx-select-line); color: var(--gx-accent); }
+.rm-act.dim { opacity: 0.45; }
+.rm-act[disabled] { opacity: 0.38; }
+.rm-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.rm-vol { position: relative; flex: 1; min-width: 0; height: 36px; border-radius: 12px; background: var(--gx-vol-track); overflow: hidden; cursor: pointer; touch-action: none; }
+.rm-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gx-vol); }
+.rm-fill.muted { opacity: 0.35; }
+.rm-eq { position: absolute; inset: 0; padding: 0 52px 0 44px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 6px;
+  white-space: nowrap; overflow: hidden; pointer-events: none; color: var(--gx-ink-2); }
+.rm-eq.lit, .rm-eqf.lit { color: var(--gx-accent); }
+.rm-eq.dark { color: var(--gx-on-vol); }
+.rm-eqw { font-family: var(--gx-label-font); font-size: 11px; letter-spacing: 0.14em; flex-shrink: 0; }
+.rm-eqn { min-width: 0; font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+.rm-mute { position: absolute; left: 4px; top: 2px; width: 32px; height: 32px; border-radius: 10px; color: var(--gx-ink); }
+.rm-mute.dark { color: var(--gx-on-vol); }
+.rm-mute.fixed { left: 3px; top: 1px; }
+.rm-level { position: absolute; right: 16px; top: 0; bottom: 0; display: flex; align-items: center; font-family: var(--gx-label-font); font-size: 16px; font-weight: 600;
+  pointer-events: none; color: var(--gx-ink); font-variant-numeric: tabular-nums; }
+.rm-level.dark { color: var(--gx-on-vol); }
+.rm-fixed { position: relative; flex: 1; min-width: 0; height: 36px; border-radius: 12px; background: var(--gx-touch); box-shadow: inset 0 0 0 1px var(--gx-touch-line);
+  box-sizing: border-box; display: flex; align-items: center; gap: 9px; padding: 0 15px; }
+.rm-fixed.has-mute { padding-left: 44px; }
+.rm-lock { position: relative; width: 14px; height: 16px; flex-shrink: 0; display: block; }
+.rm-lock span:first-child { position: absolute; left: 2px; top: 0; width: 10px; height: 8px; border: 2px solid var(--gx-ink-2); border-bottom: none; border-radius: 5px 5px 0 0; box-sizing: border-box; display: block; }
+.rm-lock span:last-child { position: absolute; left: 0; bottom: 0; width: 14px; height: 9px; border-radius: 2.5px; background: var(--gx-ink-2); display: block; }
+.rm-fixed-t { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rm-eqf { display: flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap; color: var(--gx-ink-2); }
+.rm-eqbtn { width: 56px; height: 56px; border-radius: 18px; background: var(--gx-button); box-shadow: inset 0 0 0 1px var(--gx-button-line); color: var(--gx-ink-2); }
+.rm-eqbtn.on { background: var(--gx-select); box-shadow: inset 0 0 0 1px var(--gx-select-line); color: var(--gx-accent); }
+.rm-eqdot { fill: var(--gx-sheet); }
+.rm-art { margin: 6px 0 18px; display: flex; justify-content: center; }
+.rm-art .rm-cover { width: min(100%,380px); }
+.rm-center { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; min-width: 0; }
+.rm-center .rm-title { max-width: 100%; font-size: 26px; letter-spacing: -0.01em; }
+.rm-by { max-width: 100%; font-size: 17px; color: var(--gx-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rm-played { display: flex; flex-direction: column; }
+.rm-played.idle { opacity: 0.38; }
+.rm-seek { position: relative; height: 28px; margin-top: 14px; display: flex; align-items: center; touch-action: none; }
+.rm-seek.can { cursor: pointer; }
+.rm-strack { position: relative; width: 100%; height: 6px; border-radius: 3px; overflow: hidden; display: block; background: rgba(127,127,127,0.25); }
+.rm-sknob { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: var(--gx-ink); box-shadow: 0 1px 4px rgba(0,0,0,0.4); pointer-events: none; }
+.rm-scrim { position: absolute; inset: 0; z-index: 6; background: var(--gx-scrim); }
+.rm-sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 7; background: var(--gx-sheet); box-shadow: 0 -10px 32px rgba(0,0,0,0.6), inset 0 1px 0 rgba(233,238,242,0.16);
+  border-radius: 24px 24px 0 0; padding: 10px 16px 22px; display: flex; flex-direction: column; gap: 14px; animation: rm-up 300ms cubic-bezier(0.32,0.72,0,1); }
+@keyframes rm-up { from { transform: translateY(100%); } }
+.rm-handle { align-self: center; width: 52px; height: 20px; margin: -8px 0; }
+.rm-handle::before { content: ''; width: 36px; height: 4px; border-radius: 2px; background: rgba(127,127,127,0.45); }
+.rm-head { display: flex; align-items: center; gap: 12px; }
+.rm-htext { flex: 1; min-width: 0; }
+.rm-htitle { font-size: 19px; font-weight: 700; }
+.rm-hstate { font-family: var(--gx-label-font); font-size: 13px; letter-spacing: 0.06em; margin-top: 4px; color: var(--gx-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rm-hstate.amber { color: var(--gx-warn); }
+.rm-power { height: 48px; padding: 0 10px; margin-right: -10px; }
+.rm-track { width: 56px; height: 32px; border-radius: 16px; position: relative; box-sizing: border-box; display: block; background: rgba(127,127,127,0.16); box-shadow: inset 0 0 0 1px rgba(127,127,127,0.3); }
+.rm-track.on { background: color-mix(in srgb,var(--gx-accent) 32%,transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb,var(--gx-accent) 50%,transparent); }
+.rm-knob { position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 50%; display: block; background: var(--gx-ink-2); transition: left 140ms ease; }
+.rm-track.on .rm-knob { left: 28px; background: var(--gx-accent); }
+.rm-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px;
+  -webkit-mask-image: linear-gradient(90deg,transparent 0,#000 16px,#000 calc(100% - 40px),transparent 100%); mask-image: linear-gradient(90deg,transparent 0,#000 16px,#000 calc(100% - 40px),transparent 100%); }
+.rm-chips::-webkit-scrollbar { display: none; }
+.rm-chips.dim { opacity: 0.4; pointer-events: none; }
+.rm-chip { height: 44px; padding: 0 16px; border-radius: 12px; font-size: 15px; font-weight: 600; white-space: nowrap; background: var(--gx-button); box-shadow: inset 0 0 0 1px var(--gx-button-line); color: var(--gx-ink); }
+.rm-chip.sel { background: var(--gx-select); box-shadow: inset 0 0 0 1px var(--gx-select-line); color: var(--gx-accent); }
+.rm-cdot { width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--gx-warn); flex-shrink: 0; }
+.rm-rule { width: 1px; align-self: stretch; margin: 10px 3px; background: rgba(127,127,127,0.3); flex-shrink: 0; }
+.rm-menu-veil { position: absolute; inset: 0; z-index: 4; background: var(--gx-scrim); }
+.rm-menu { position: absolute; z-index: 5; left: 16px; right: 16px; top: 72px; background: var(--gx-sheet); border-radius: 18px; box-shadow: 0 18px 48px rgba(0,0,0,0.55), inset 0 0 0 1px var(--gx-button-line); padding: 8px 0; }
+.rm-menu .label { padding: 8px 18px 6px; font-family: var(--gx-label-font); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; }
+.rm-menu button { justify-content: flex-start; width: 100%; gap: 12px; min-height: 64px; padding: 0 18px; }
+.rm-menu button.current { background: var(--gx-button); }
+.rm-menu .mark { width: 30px; height: 30px; }
+.rm-menu .who .n { font-size: 16px; font-weight: 700; }
 `;
 
 /* The player's look names Nunito Sans and IBM Plex Mono; Home Assistant has
@@ -360,6 +527,7 @@ class GexisPlayerCard extends HTMLElement {
     this._current = null;       // the player shown: from the config, then the switcher
     this._menu = false;
     this._dpadOpen = false;
+    this._eqOpen = false;        // the full form's EQ sheet
     this._sent = null;           // { text, until }
     this._drag = null;           // the volume while a finger is on it
     this._html = '';
@@ -415,7 +583,7 @@ class GexisPlayerCard extends HTMLElement {
   }
 
   getCardSize() {
-    return this._config.form === 'compact' ? 4 : 9;
+    return this._config.form === 'compact' ? 4 : 14;
   }
 
   getGridOptions() {
@@ -462,6 +630,18 @@ class GexisPlayerCard extends HTMLElement {
     const art = active && kind !== 'bluetooth' && a.entity_picture ? a.entity_picture : null;
     const duration = Number(a.media_duration) || 0;
     const hasPos = active && kind !== 'bluetooth' && duration > 0 && a.media_position != null;
+    const screenSw = sib.switches.screen && hass.states[sib.switches.screen];
+    /* The equaliser: its switch and its setting, both there (ADR-0163 16). */
+    const eqSw = sib.switches.equaliser && hass.states[sib.switches.equaliser];
+    const eqSel = sib.select && hass.states[sib.select];
+    const eqThere = (e) => e && e.state !== 'unavailable' && e.state !== 'unknown';
+    const eq = eqThere(eqSw) && eqThere(eqSel) ? {
+      on: eqSw.state === 'on',
+      sel: eqSel.state,
+      presets: eqSel.attributes.presets || [],
+      own: eqSel.attributes.own || [],
+      label: eqSw.state === 'on' ? eqSel.state : 'Off',
+    } : null;
     return {
       id, ids, st, a, unreachable, active, kind, art, duration, hasPos,
       name: playerName(hass, id),
@@ -473,16 +653,15 @@ class GexisPlayerCard extends HTMLElement {
       prev: active && has(F.PREVIOUS_TRACK),
       next: active && has(F.NEXT_TRACK),
       playPause: active && (has(F.PLAY) || has(F.PAUSE)),
-      shuffle: active && has(F.SHUFFLE_SET),
-      repeat: active && has(F.REPEAT_SET),
-      shuffleOn: !!a.shuffle,
-      repeatMode: a.repeat || 'off',
       volume: has(F.VOLUME_SET),
       mute: has(F.VOLUME_MUTE),
       muted: !!a.is_volume_muted,
       level: Math.round((Number(a.volume_level) || 0) * 100),
-      prevOk: works('previous'), nextOk: works('next'), shuffleOk: works('shuffle'), repeatOk: works('repeat'),
+      prevOk: works('previous'), nextOk: works('next'),
       screen: hasButtons || hasDpad || views.length > 0,
+      seek: active && has(F.SEEK),
+      standbyOn: eqThere(screenSw) ? screenSw.state === 'off' : null,
+      eq,
       buttons: hasButtons,
       views,
       dpad: hasDpad,
@@ -491,13 +670,21 @@ class GexisPlayerCard extends HTMLElement {
   }
 
   _render() {
-    if (!this._hass || this._drag !== null) return;
+    if (!this._hass || this._drag !== null || this._seeking) return;
     const v = this._view();
     const html = v ? this._markup(v) : '<div class="root"><div class="unreachable"><div><div class="t">No Gexis player</div><div class="n">Add a player under Settings → Devices &amp; services.</div></div></div></div>';
     if (html === this._html) { this._tickPosition(); return; }
     this._html = html;
     this._v = v;
+    const chips = this.shadowRoot.querySelector('[data-chips]');
+    const left = chips ? chips.scrollLeft : null;
     this.shadowRoot.innerHTML = `<style>${STYLE}</style>${html}`;
+    const now = this.shadowRoot.querySelector('[data-chips]');
+    if (now && left !== null) now.scrollLeft = left;
+    else if (now) {
+      const sel = now.querySelector('.rm-chip.sel');
+      if (sel && sel.offsetLeft + sel.offsetWidth > now.clientWidth - 40) now.scrollLeft = sel.offsetLeft - 120;
+    }
     this._tickPosition();
   }
 
@@ -505,6 +692,7 @@ class GexisPlayerCard extends HTMLElement {
 
   _markup(v) {
     const full = this._config.form !== 'compact';
+    if (full) return this._remote(v);
     const multi = v.ids.length > 1;
     const src = v.kind ? SOURCES[v.kind] : null;
     const bleed = this._config.look === 'player' && v.art && !v.unreachable;
@@ -524,94 +712,205 @@ class GexisPlayerCard extends HTMLElement {
         <div style="display:flex;flex-direction:column;gap:3px;min-width:0"><div class="t">Can’t reach ${esc(v.name)}</div>
         <div class="n">Home Assistant reconnects when the player is back on the network.</div></div></div>`;
     } else {
-      h += full ? this._full(v, src) : this._compact(v, src);
+      h += this._compact(v, src);
     }
     if (this._menu && multi) h += this._switcherMenu(v);
     return h + '</div>';
   }
 
-  _well(v, src, cls) {
-    if (v.art) return `<div class="${cls}"><img class="art" src="${esc(v.art)}" alt=""></div>`;
+  _well(v, src) {
+    if (v.art) return `<div class="c-well"><img class="art" src="${esc(v.art)}" alt=""></div>`;
     const ink = src ? src.ink : 'var(--gx-ink-2)';
-    const big = cls === 'well';
-    const mark = v.kind && v.kind !== 'other' ? sourceMark(v.kind, big ? 40 : 24) : svg(P.note, big ? 36 : 24);
-    return `<div class="${cls}" style="color:${ink}"><span class="${big ? 'well-mark' : ''}" style="display:flex;align-items:center;justify-content:center">${mark}</span></div>`;
+    const mark = v.kind && v.kind !== 'other' ? sourceMark(v.kind, 24) : svg(P.note, 24);
+    return `<div class="c-well" style="color:${ink}"><span style="display:flex;align-items:center;justify-content:center">${mark}</span></div>`;
   }
 
-  _repeatIcon(v, size) {
-    return svg(v.repeatMode === 'one' ? P.repeatOnce : P.repeat, size);
-  }
-
-  _full(v, src) {
-    const ink = src ? src.ink : 'var(--gx-ink-2)';
-    let np = `<div class="what" data-gexis-card="what-plays">${this._well(v, src, 'well')}
-      <div class="meta"><div class="title" style="color:${v.active ? 'var(--gx-ink)' : 'var(--gx-ink-2)'}">${esc(v.title)}</div>
-      ${v.active ? `${v.artist ? `<div class="sub ellip">${esc(v.artist)}</div>` : ''}${v.album ? `<div class="sub ellip">${esc(v.album)}</div>` : ''}` : ''}</div></div>`;
-    if (v.hasPos) {
-      np += `<div class="pos" data-gexis-card="position"><div class="bar"><div data-pos-fill style="background:${ink};width:0%"></div></div>
-        <div class="times"><span data-pos-text></span><span>${mmss(v.duration)}</span></div></div>`;
-    }
-    if (v.prev || v.next || v.playPause) {
-      np += `<div class="transport" data-gexis-card="transport">
-        ${v.shuffle ? `<button class="t44 hov" data-act="shuffle" aria-label="Shuffle" aria-pressed="${v.shuffleOn}" ${v.shuffleOk ? '' : 'disabled'} style="color:${v.shuffleOn ? 'var(--gx-accent)' : 'var(--gx-ink-2)'}">${svg(P.shuffle, 22)}</button>` : ''}
-        ${v.prev ? `<button class="t48 hov" data-act="prev" aria-label="Previous" ${v.prevOk ? '' : 'disabled'}>${svg(P.prev, 30)}</button>` : ''}
-        ${v.playPause ? `<button class="playbtn press" data-act="play" aria-label="${v.playing ? 'Pause' : 'Play'}">${v.playing ? svg(P.pause, 30) : svg(P.play, 32)}</button>` : ''}
-        ${v.next ? `<button class="t48 hov" data-act="next" aria-label="Next" ${v.nextOk ? '' : 'disabled'}>${svg(P.next, 30)}</button>` : ''}
-        ${v.repeat ? `<button class="t44 hov" data-act="repeat" aria-label="Repeat: ${v.repeatMode}" ${v.repeatOk ? '' : 'disabled'} style="color:${v.repeatMode !== 'off' ? 'var(--gx-accent)' : 'var(--gx-ink-2)'}">${this._repeatIcon(v, 22)}</button>` : ''}
-      </div>`;
-    }
-    np += this._volume(v, false);
-    let h = `<div class="full"><div class="np" data-gexis-card="now-playing">${np}</div>`;
-    if (v.screen) {
-      h += `<div class="screen" data-gexis-card="screen"><div class="label">On the player’s screen</div>
-        ${v.buttons || v.views.length ? this._quickTiles(v) : ''}
-        ${v.dpad ? `<div class="dpad" data-gexis-card="dpad">${this._back()}${this._pad('pad')}<div></div></div>
-        ${this._sentText() ? `<div class="sent" aria-live="polite">${esc(this._sentText())}</div>` : ''}` : ''}
-      </div>`;
-    }
-    return h + '</div>';
-  }
-
-  _volume(v, compact) {
+  _volume(v) {
     if (!v.volume) {
-      return `<div class="${compact ? 'c-fixed' : 'fixed'}" data-gexis-card="volume-fixed">${svg(P.lock, compact ? 16 : 18)}
-        <span>${compact ? 'Fixed output · set on the amplifier' : 'Fixed output · the volume is set on the amplifier'}</span></div>`;
+      return `<div class="c-fixed" data-gexis-card="volume-fixed">${svg(P.lock, 16)}<span>Fixed output · set on the amplifier</span></div>`;
     }
     const level = v.level;
     const knob = level > 6 ? (v.muted ? 0.5 : 0.9) : 0;
-    return `<div class="${compact ? 'c-volume' : 'volume'}" data-gexis-card="volume">
-      ${v.mute ? `<button class="t44 hov" data-act="mute" aria-label="${v.muted ? 'Unmute' : 'Mute'}" style="color:${v.muted ? 'var(--gx-accent)' : 'var(--gx-ink)'}">${svg(v.muted ? P.muted : P.volume, compact ? 22 : 24)}</button>` : '<div style="width:44px;flex-shrink:0"></div>'}
+    return `<div class="c-volume" data-gexis-card="volume">
+      ${v.mute ? `<button class="t44 hov" data-act="mute" aria-label="${v.muted ? 'Unmute' : 'Mute'}" style="color:${v.muted ? 'var(--gx-accent)' : 'var(--gx-ink)'}">${svg(v.muted ? P.muted : P.volume, 22)}</button>` : '<div style="width:44px;flex-shrink:0"></div>'}
       <div class="vol" data-vol role="slider" tabindex="0" aria-label="Volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${level}">
         <div class="fill" style="width:${level}%;opacity:${v.muted ? 0.35 : 1}"></div>
-        <div class="knob" style="left:calc(${level}% - ${compact ? 9 : 10}px);opacity:${knob}"></div>
+        <div class="knob" style="left:calc(${level}% - 9px);opacity:${knob}"></div>
       </div>
       <span class="voltext">${v.muted ? 'Muted' : `${level}%`}</span></div>`;
-  }
-
-  _quickTiles(v) {
-    const tile = (k, label, icon) =>
-      `<button class="tile" data-act="go" data-key="${k}" aria-label="${label}" ${v.usable(k) ? '' : 'disabled'}>${svg(icon, 20)}<span>${label}</span></button>`;
-    const view = (w) =>
-      `<button class="tile${w.on ? ' on' : ''}" data-act="view" data-key="${w.key}" aria-label="${w.label}" aria-pressed="${w.on}">${svg(P[w.icon], 20)}<span>${w.label}</span></button>`;
-    const buttons = v.buttons ? `${tile('home', 'Home', P.home)}${tile('now', 'Now playing', P.note)}${tile('lyrics', 'Lyrics', P.lyrics)}` : '';
-    return `<div class="quick" data-gexis-card="quick-actions">${buttons}${v.views.map(view).join('')}</div>`;
   }
 
   _back() {
     return `<button class="pill press" data-act="key" data-key="back" aria-label="Back">${svg(P.back, 20)}<span>Back</span></button>`;
   }
 
-  _pad(cls) {
-    const s = cls === 'pad' ? 30 : 28;
-    const dir = (k) => `<button class="dir ${k}" data-act="key" data-key="${k}" aria-label="${KEY_NAMES[k]}">${svg(P[k], s)}</button>`;
-    return `<div class="${cls}">${dir('up')}${dir('down')}${dir('left')}${dir('right')}
+  _pad() {
+    const dir = (k) => `<button class="dir ${k}" data-act="key" data-key="${k}" aria-label="${KEY_NAMES[k]}">${svg(P[k], 28)}</button>`;
+    return `<div class="c-pad">${dir('up')}${dir('down')}${dir('left')}${dir('right')}
       <button class="ok press" data-act="key" data-key="ok" aria-label="OK">OK</button></div>`;
+  }
+
+  /* ---- the full form: the phone's remote (ADR-0163 15-17, ADR-0164) ---- */
+
+  _remote(v) {
+    const multi = v.ids.length > 1;
+    let h = `<div class="root rm" data-gexis-card="root">`;
+    if (this._config.look === 'player') {
+      h += `<div class="rm-bg"><div class="rm-weave"></div>${v.art && !v.unreachable ? `<img class="rm-blur" src="${esc(v.art)}" alt="">` : ''}<div class="rm-veil"></div></div>`;
+    }
+    h += `<div class="rm-top" data-gexis-card="switcher">
+      <button class="rm-picker" data-act="menu" ${multi ? `aria-haspopup="listbox" aria-expanded="${this._menu}"` : 'disabled'} aria-label="${esc(v.name)}: ${esc(v.line)}">
+        <img src="${MARK}" alt="" style="opacity:${v.unreachable ? 0.45 : 1}">
+        <span class="rm-pt"><span class="rm-pn">${esc(v.name)}</span><span class="rm-ps">${esc(v.line)}</span></span>
+        ${multi ? svg(P.chevron, 22, `class="rm-chev${this._menu ? ' open' : ''}"`) : ''}
+      </button></div>`;
+    if (v.unreachable) {
+      h += `<div class="unreachable" data-gexis-card="unreachable">${svg(P.alert, 28)}
+        <div style="display:flex;flex-direction:column;gap:3px;min-width:0"><div class="t">Can’t reach ${esc(v.name)}</div>
+        <div class="n">Home Assistant reconnects when the player is back on the network.</div></div></div>`;
+    } else {
+      h += `<div class="rm-page">${v.screen ? this._rmScreen(v) : this._rmNoScreen(v)}</div>`;
+    }
+    if (this._menu && multi) h += this._switcherMenu(v, true);
+    if (this._eqOpen && v.eq && !v.unreachable) h += this._eqSheet(v);
+    return h + '</div>';
+  }
+
+  _rmCover(v, big) {
+    let inner;
+    if (v.active && v.art) inner = `<img src="${esc(v.art)}" alt="">`;
+    else if (v.active) inner = '<span class="rm-pending"><span class="rm-ring"><span class="rm-dot"></span></span><span class="rm-pl">artwork pending</span></span>';
+    else inner = svg(P.note, big ? 72 : 44);
+    return `<div class="rm-cover${big ? ' big' : ''}" data-gexis-card="cover">${inner}<span class="rm-edge"></span></div>`;
+  }
+
+  /* With nothing playing the three stay, greyed, where they will be. */
+  _rmTransport(v, big) {
+    const idle = !v.active;
+    const s = big ? [38, 40, 42] : [26, 28, 30];
+    const prev = idle || v.prev, next = idle || v.next, play = idle || v.playPause;
+    if (!prev && !next && !play) return '';
+    return `<div class="rm-transport${big ? ' big' : ''}${idle ? ' idle' : ''}" data-gexis-card="transport">
+      ${prev ? `<button class="rm-skip" data-act="prev" aria-label="Previous" ${!idle && v.prevOk ? '' : 'disabled'}>${svg(P.prev, s[0])}</button>` : ''}
+      ${play ? `<button class="rm-play" data-act="play" aria-label="${v.playing ? 'Pause' : 'Play'}" ${idle ? 'disabled' : ''}>${v.playing ? svg(P.pause, s[1]) : svg(P.play, s[2])}</button>` : ''}
+      ${next ? `<button class="rm-skip" data-act="next" aria-label="Next" ${!idle && v.nextOk ? '' : 'disabled'}>${svg(P.next, s[0])}</button>` : ''}
+    </div>`;
+  }
+
+  _rmTimes(v) {
+    const left = !v.active ? '0:00' : v.hasPos ? '' : mmss(Number(v.a.media_position) || 0);
+    const right = !v.active ? '0:00' : v.hasPos ? mmss(v.duration) : 'live';
+    return `<div class="rm-times"><span data-pos-text>${left}</span><span>${right}</span></div>`;
+  }
+
+  _rmScreen(v) {
+    let h = `<div class="rm-now" data-gexis-card="what-plays">${this._rmCover(v, false)}
+      <div class="rm-side"><div class="rm-text"><span class="rm-title${v.active ? '' : ' none'}">${esc(v.title)}</span>
+        ${v.active && v.artist ? `<span class="rm-artist">${esc(v.artist)}</span>` : ''}</div>
+        ${this._rmTransport(v, false)}</div></div>`;
+    h += `<div class="rm-progress${v.active ? '' : ' idle'}" data-gexis-card="position">
+      <div class="rm-pbar${v.active && !v.hasPos ? ' live' : ''}">${v.hasPos ? '<div class="rm-pfill" data-pos-fill></div>' : ''}</div>${this._rmTimes(v)}</div>`;
+    if (v.dpad || v.buttons) h += this._rmTouch(v);
+    h += this._rmActions(v);
+    return h + this._rmVolume(v);
+  }
+
+  _rmNoScreen(v) {
+    const by = [v.artist, v.album].filter(Boolean).join(' · ');
+    const can = v.seek && v.hasPos;
+    return `<div class="rm-art">${this._rmCover(v, true)}</div>
+      <div class="rm-center" data-gexis-card="what-plays"><span class="rm-title${v.active ? '' : ' none'}">${esc(v.title)}</span>
+        ${v.active && by ? `<span class="rm-by">${esc(by)}</span>` : ''}</div>
+      <div class="rm-played${v.active ? '' : ' idle'}" data-gexis-card="position">
+        <div class="rm-seek${can ? ' can' : ''}" ${can ? `data-seek role="slider" tabindex="0" aria-label="Position" aria-valuemin="0" aria-valuemax="${Math.round(v.duration)}"` : ''}>
+          <span class="rm-strack${v.active && !v.hasPos ? ' live' : ''}">${v.hasPos ? '<span class="rm-pfill" data-pos-fill></span>' : ''}</span>
+          ${can ? '<span class="rm-sknob" data-pos-knob></span>' : ''}</div>
+        ${this._rmTimes(v)}</div>
+      ${this._rmTransport(v, true)}${this._rmVolume(v)}`;
+  }
+
+  /* The D-pad alone (ADR-0163 15); the corners are the remote's. */
+  _rmTouch(v) {
+    const meters = v.views.find((w) => w.key === 'visualiser');
+    let h = '<div class="rm-area" data-gexis-card="dpad"><div class="rm-pad">';
+    if (v.dpad) {
+      h += `<div class="rm-dpad">${['up', 'down', 'left', 'right'].map((k) => `<button class="rm-arrow ${k}" data-act="key" data-key="${k}" aria-label="${KEY_NAMES[k]}">${svg(P[k], 32)}</button>`).join('')}
+        <button class="rm-ok" data-act="key" data-key="ok" aria-label="OK">OK</button></div>`;
+    }
+    if (v.buttons) {
+      h += `<button class="rm-corner tl" data-act="go" data-key="home" aria-label="Home" ${v.usable('home') ? '' : 'disabled'}>${stroke(S.home)}</button>
+        <button class="rm-corner tr" data-act="go" data-key="lyrics" aria-label="Lyrics" ${v.usable('lyrics') ? '' : 'disabled'}>${stroke(S.lyrics)}</button>`;
+    }
+    if (v.dpad) h += `<button class="rm-corner bl" data-act="key" data-key="back" aria-label="Back">${svg(P.back, 22)}</button>`;
+    if (meters) h += `<button class="rm-corner br${meters.on ? ' on' : ''}" data-act="view" data-key="visualiser" aria-label="Meters" aria-pressed="${meters.on}">${stroke(S.meters)}</button>`;
+    return h + '</div></div>';
+  }
+
+  /* Standby, the idle screen, Playing, Room - each where the player has it;
+   * in standby the views dim (ADR-0164 D4). */
+  _rmActions(v) {
+    const off = v.standbyOn === true;
+    const idle = v.views.find((w) => w.key === 'idle_screen');
+    const room = v.views.find((w) => w.key === 'dashboard');
+    const act = (attrs, label, glyph, on, dim, disabled = false) =>
+      `<button class="rm-act${on ? ' on' : ''}${dim ? ' dim' : ''}" ${attrs} aria-label="${label}" aria-pressed="${on}" ${disabled ? 'disabled' : ''}>${stroke(glyph)}</button>`;
+    let h = '';
+    if (v.standbyOn !== null) h += act('data-act="standby"', off ? 'Screen on' : 'Standby', S.standby, off, false);
+    if (idle) h += act('data-act="view" data-key="idle_screen"', 'Idle screen', S.idle, idle.on, off);
+    let right = '';
+    if (v.buttons) right += act('data-act="go" data-key="now"', 'Playing', S.playing, false, off, !v.usable('now'));
+    if (room) right += act('data-act="view" data-key="dashboard"', 'Room', S.room, room.on, off);
+    if (!h && !right) return '';
+    return `<div class="rm-actions" data-gexis-card="quick-actions">${h}<span class="rm-gap"></span>${right}</div>`;
+  }
+
+  /* The bar with mute inside it, the level and the EQ setting's name; with
+   * Fixed volume the panel's locked row, mute where the output has a control
+   * (ADR-0165). */
+  _rmVolume(v) {
+    const eq = v.eq;
+    const label = (cls) => `<span class="${cls}${eq.on ? ' lit' : ''}"><span class="rm-eqw">EQ</span><span class="rm-eqn">${esc(eq.label)}</span></span>`;
+    const mute = (extra) => `<button class="rm-mute${extra}" data-act="mute" aria-label="${v.muted ? 'Unmute' : 'Mute'}" aria-pressed="${v.muted}">${svg(v.muted ? P.muted : P.volume, 24)}</button>`;
+    let row;
+    if (!v.volume) {
+      row = `<div class="rm-fixed${v.mute ? ' has-mute' : ''}" role="group" aria-label="Fixed output">${v.mute ? mute(' fixed') : ''}
+        <span class="rm-lock" aria-hidden="true"><span></span><span></span></span><span class="rm-fixed-t">Fixed output</span>${eq ? label('rm-eqf') : ''}</div>`;
+    } else {
+      const shown = v.level;
+      row = `<div class="rm-vol" data-rmvol role="slider" tabindex="0" aria-label="Volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${v.muted ? 0 : shown}">
+        <span class="rm-fill${v.muted ? ' muted' : ''}" style="width:${shown}%"></span>
+        ${eq ? label('rm-eq') : ''}${eq && !v.muted ? `<span class="rm-eq dark" data-dark style="clip-path:inset(0 ${100 - shown}% 0 0)" aria-hidden="true"><span class="rm-eqw">EQ</span><span class="rm-eqn">${esc(eq.label)}</span></span>` : ''}
+        ${v.mute ? mute(!v.muted && shown > 14 ? ' dark' : '') : ''}
+        <span class="rm-level${!v.muted && shown > 86 ? ' dark' : ''}">${v.muted ? 'Off' : shown}</span></div>`;
+    }
+    const button = eq ? `<button class="rm-eqbtn${eq.on ? ' on' : ''}" data-act="eq" aria-label="Equaliser">${EQ_ICON}</button>` : '';
+    return `<div class="rm-row" data-gexis-card="volume">${row}${button}</div>`;
+  }
+
+  /* The switch and the settings, presets then the owner's after a rule,
+   * Custom first while it is the one in use (ADR-0163 C6). */
+  _eqSheet(v) {
+    const eq = v.eq;
+    const custom = eq.sel === 'Custom';
+    const [line, amber] = !eq.on ? ['Off · bit-perfect', false] : custom ? ['Custom · not saved', true]
+      : [`${eq.sel} · ${eq.own.includes(eq.sel) ? 'yours' : 'preset'}`, false];
+    const chip = (name) => `<button class="rm-chip${name === eq.sel ? ' sel' : ''}" data-act="eqsel" data-name="${esc(name)}" aria-pressed="${name === eq.sel}">${esc(name)}</button>`;
+    let chips = custom ? '<button class="rm-chip sel" aria-pressed="true" tabindex="-1"><span class="rm-cdot"></span>Custom</button>' : '';
+    chips += eq.presets.map(chip).join('');
+    if (eq.own.length) chips += `<span class="rm-rule"></span>${eq.own.map(chip).join('')}`;
+    return `<div class="rm-scrim" data-act="eqclose"></div>
+      <div class="rm-sheet" role="dialog" aria-label="Equaliser" data-gexis-card="equaliser">
+        <button class="rm-handle" data-act="eqclose" aria-label="Close"></button>
+        <div class="rm-head"><div class="rm-htext"><div class="rm-htitle">Equaliser</div><div class="rm-hstate${amber ? ' amber' : ''}">${esc(line)}</div></div>
+          <button class="rm-power" data-act="eqpower" aria-label="Equaliser on or off" aria-pressed="${eq.on}"><span class="rm-track${eq.on ? ' on' : ''}"><span class="rm-knob"></span></span></button></div>
+        <div class="rm-chips${eq.on ? '' : ' dim'}" data-chips>${chips}</div>
+      </div>`;
   }
 
   _compact(v, src) {
     const ink = src ? src.ink : 'var(--gx-ink-2)';
     let h = `<div class="c-np" data-gexis-card="now-playing">
-      <div class="c-what" data-gexis-card="what-plays">${this._well(v, src, 'c-well')}
+      <div class="c-what" data-gexis-card="what-plays">${this._well(v, src)}
         <div class="c-meta"><div class="c-title ellip" style="color:${v.active ? 'var(--gx-ink)' : 'var(--gx-ink-2)'}">${esc(v.title)}</div>
         ${v.active && v.artist ? `<div class="sub ellip">${esc(v.artist)}</div>` : ''}</div>
         ${v.prev || v.next || v.playPause ? `<div class="c-transport" data-gexis-card="transport">
@@ -621,7 +920,7 @@ class GexisPlayerCard extends HTMLElement {
         </div>` : ''}
       </div>`;
     if (v.hasPos) h += `<div class="c-pos" data-gexis-card="position"><div class="bar"><div data-pos-fill style="background:${ink};width:0%"></div></div></div>`;
-    h += this._volume(v, true);
+    h += this._volume(v);
     if (v.screen) {
       const sq = (k, label, icon) => `<button class="sq" data-act="go" data-key="${k}" aria-label="${label}" ${v.usable(k) ? '' : 'disabled'}>${svg(icon, 22)}</button>`;
       h += `<div class="c-quick" data-gexis-card="quick-actions">
@@ -631,7 +930,7 @@ class GexisPlayerCard extends HTMLElement {
         ${v.dpad ? `<button class="dpad-btn${this._dpadOpen ? ' open' : ''}" data-act="dpad" aria-expanded="${this._dpadOpen}">${svg(P.cross, 22)}<span>D-pad</span>${svg(P.chevron, 18, `style="color:var(--gx-ink-2);transform:rotate(${this._dpadOpen ? 180 : 0}deg);transition:transform 160ms ease"`)}</button>` : ''}
       </div>`;
       if (v.dpad && this._dpadOpen) {
-        h += `<div class="c-dpad" data-gexis-card="dpad">${this._back()}${this._pad('c-pad')}<div></div></div>
+        h += `<div class="c-dpad" data-gexis-card="dpad">${this._back()}${this._pad()}<div></div></div>
           ${this._sentText() ? `<div class="c-sent" aria-live="polite">${esc(this._sentText())}</div>` : ''}`;
       }
     } else {
@@ -640,7 +939,7 @@ class GexisPlayerCard extends HTMLElement {
     return h + '</div>';
   }
 
-  _switcherMenu(v) {
+  _switcherMenu(v, rm = false) {
     const rows = v.ids.map((id) => {
       const st = this._hass.states[id];
       const cur = id === v.id;
@@ -650,8 +949,8 @@ class GexisPlayerCard extends HTMLElement {
         <div class="who"><span class="n ellip">${esc(playerName(this._hass, id))}</span><span class="s ellip">${esc(stateLine(st))}</span></div>
         ${cur ? svg(P.check, 22, 'class="tick"') : ''}</button>`;
     }).join('');
-    return `<div class="menu-veil" data-act="close"></div>
-      <div class="menu" data-gexis-card="switcher-menu" role="listbox" aria-label="Gexis players"><div class="label">Gexis players</div>${rows}</div>`;
+    return `<div class="${rm ? 'rm-menu-veil' : 'menu-veil'}" data-act="close"></div>
+      <div class="menu${rm ? ' rm-menu' : ''}" data-gexis-card="switcher-menu" role="listbox" aria-label="Gexis players"><div class="label">Gexis players</div>${rows}</div>`;
   }
 
   /* ---- the position, moved every second without a redraw ---- */
@@ -667,10 +966,13 @@ class GexisPlayerCard extends HTMLElement {
 
   _tickPosition() {
     const v = this._v;
-    if (!v || !v.hasPos) return;
+    if (!v || !v.hasPos || this._seeking) return;
     const pos = this._position(v);
+    const at = `${Math.round((pos / v.duration) * 1000) / 10}%`;
     const fill = this.shadowRoot.querySelector('[data-pos-fill]');
-    if (fill) fill.style.width = `${Math.round((pos / v.duration) * 1000) / 10}%`;
+    if (fill) fill.style.width = at;
+    const knob = this.shadowRoot.querySelector('[data-pos-knob]');
+    if (knob) knob.style.left = at;
     const text = this.shadowRoot.querySelector('[data-pos-text]');
     if (text) text.textContent = mmss(pos);
   }
@@ -710,7 +1012,9 @@ class GexisPlayerCard extends HTMLElement {
     if (!el || el.disabled) return;
     const v = this._v;
     const act = el.dataset.act;
-    if (act === 'menu') { this._menu = !this._menu; this._html = ''; this._render(); return; }
+    if (act === 'menu') { this._menu = !this._menu; this._eqOpen = false; this._html = ''; this._render(); return; }
+    if (act === 'eq') { this._eqOpen = true; this._menu = false; this._html = ''; this._render(); return; }
+    if (act === 'eqclose') { this._eqOpen = false; this._html = ''; this._render(); return; }
     if (act === 'close') { this._menu = false; this._html = ''; this._render(); return; }
     if (act === 'pick') { this._current = el.dataset.id; this._menu = false; this._html = ''; this._render(); return; }
     if (act === 'dpad') { this._dpadOpen = !this._dpadOpen; this._html = ''; this._render(); return; }
@@ -719,12 +1023,17 @@ class GexisPlayerCard extends HTMLElement {
     if (act === 'play') this._call('media_player', v.playing ? 'media_pause' : 'media_play', id);
     else if (act === 'prev') this._call('media_player', 'media_previous_track', id);
     else if (act === 'next') this._call('media_player', 'media_next_track', id);
-    else if (act === 'shuffle') this._call('media_player', 'shuffle_set', { ...id, shuffle: !v.shuffleOn });
-    else if (act === 'repeat') {
-      const nextMode = { off: 'all', all: 'one', one: 'off' }[v.repeatMode] || 'off';
-      this._call('media_player', 'repeat_set', { ...id, repeat: nextMode });
-    } else if (act === 'mute') this._call('media_player', 'volume_mute', { ...id, is_volume_muted: !v.muted });
-    else if (act === 'view') {
+    else if (act === 'mute') this._call('media_player', 'volume_mute', { ...id, is_volume_muted: !v.muted });
+    else if (act === 'standby') {
+      const sw = v.sib.switches.screen;
+      if (sw) this._call('switch', v.standbyOn ? 'turn_on' : 'turn_off', { entity_id: sw });
+    } else if (act === 'eqpower') {
+      const sw = v.sib.switches.equaliser;
+      if (sw && v.eq) this._call('switch', v.eq.on ? 'turn_off' : 'turn_on', { entity_id: sw });
+    } else if (act === 'eqsel') {
+      const name = el.dataset.name;
+      if (v.sib.select && v.eq && v.eq.on && name !== v.eq.sel) this._call('select', 'select_option', { entity_id: v.sib.select, option: name });
+    } else if (act === 'view') {
       const sw = v.sib.switches[el.dataset.key];
       const on = this._hass.states[sw]?.state === 'on';
       if (sw) this._call('switch', on ? 'turn_off' : 'turn_on', { entity_id: sw });
@@ -734,15 +1043,16 @@ class GexisPlayerCard extends HTMLElement {
     } else if (act === 'key') {
       const key = el.dataset.key;
       if (!v.sib.remote) return;
-      this._call('remote', 'send_command', { entity_id: v.sib.remote, command: key }).then((ok) => {
-        if (ok) this._say(`Sent ${KEY_NAMES[key]}`);
-      });
+      const sent = this._call('remote', 'send_command', { entity_id: v.sib.remote, command: key });
+      /* The full form says nothing: the screen is the feedback, as on the
+       * phone (ADR-0163 C5). */
+      if (this._config.form === 'compact') sent.then((ok) => { if (ok) this._say(`Sent ${KEY_NAMES[key]}`); });
     }
   }
 
   _onKey(e) {
-    if (e.key === 'Escape' && this._menu) { this._menu = false; this._html = ''; this._render(); return; }
-    const vol = e.target.closest && e.target.closest('[data-vol]');
+    if (e.key === 'Escape' && (this._menu || this._eqOpen)) { this._menu = false; this._eqOpen = false; this._html = ''; this._render(); return; }
+    const vol = e.target.closest && e.target.closest('[data-vol], [data-rmvol]');
     if (vol && this._v && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
       e.preventDefault();
       const level = Math.max(0, Math.min(100, this._v.level + (e.key === 'ArrowRight' ? 5 : -5)));
@@ -753,6 +1063,9 @@ class GexisPlayerCard extends HTMLElement {
   /* The volume follows the finger and is set when it lifts, so a drag is one
    * change, not fifty; the card is not redrawn meanwhile. */
   _onPointer(e) {
+    if (e.target.closest('[data-act]')) return;
+    if (e.target.closest('[data-rmvol]')) { this._rmDrag(e, e.target.closest('[data-rmvol]')); return; }
+    if (e.target.closest('[data-seek]')) { this._seekDrag(e, e.target.closest('[data-seek]')); return; }
     const bar = e.target.closest('[data-vol]');
     if (!bar || !this._v) return;
     e.preventDefault();
@@ -790,10 +1103,102 @@ class GexisPlayerCard extends HTMLElement {
     bar.addEventListener('pointerup', up);
     bar.addEventListener('pointercancel', up);
   }
+  /* A finger held on a bar: `show` follows it, `done` sends where it lifted. */
+  _hold(e, bar, show, done) {
+    e.preventDefault();
+    const at = (x) => {
+      const r = bar.getBoundingClientRect();
+      return Math.max(0, Math.min(1, (x - r.left) / r.width));
+    };
+    bar.setPointerCapture(e.pointerId);
+    let last = at(e.clientX);
+    show(last);
+    const move = (ev) => { last = at(ev.clientX); show(last); };
+    const up = () => {
+      bar.removeEventListener('pointermove', move);
+      bar.removeEventListener('pointerup', up);
+      bar.removeEventListener('pointercancel', up);
+      done(last);
+    };
+    bar.addEventListener('pointermove', move);
+    bar.addEventListener('pointerup', up);
+    bar.addEventListener('pointercancel', up);
+  }
+
+  _rmDrag(e, bar) {
+    const fill = bar.querySelector('.rm-fill');
+    const dark = bar.querySelector('[data-dark]');
+    const level = bar.querySelector('.rm-level');
+    const mute = bar.querySelector('.rm-mute');
+    const id = this._v.id;
+    this._hold(e, bar, (f) => {
+      const n = Math.round(f * 100);
+      this._drag = n;
+      fill.style.width = `${n}%`;
+      fill.classList.remove('muted');
+      if (dark) dark.style.clipPath = `inset(0 ${100 - n}% 0 0)`;
+      level.textContent = n;
+      level.classList.toggle('dark', n > 86);
+      if (mute) mute.classList.toggle('dark', n > 14);
+    }, () => {
+      const n = this._drag;
+      this._drag = null;
+      this._html = '';
+      this._call('media_player', 'volume_set', { entity_id: id, volume_level: n / 100 });
+      this._render();
+    });
+  }
+
+  _seekDrag(e, bar) {
+    const v = this._v;
+    if (!v || !v.hasPos) return;
+    const fill = bar.querySelector('[data-pos-fill]');
+    const knob = bar.querySelector('[data-pos-knob]');
+    const text = this.shadowRoot.querySelector('[data-pos-text]');
+    this._seeking = true;
+    this._hold(e, bar, (f) => {
+      if (fill) fill.style.width = `${f * 100}%`;
+      if (knob) knob.style.left = `${f * 100}%`;
+      if (text) text.textContent = mmss(f * v.duration);
+    }, (f) => {
+      this._seeking = false;
+      this._call('media_player', 'media_seek', { entity_id: v.id, seek_position: Math.round(f * v.duration * 10) / 10 });
+    });
+  }
 }
 
-if (!customElements.get('gexis-player-card')) {
-  customElements.define('gexis-player-card', GexisPlayerCard);
+
+/* **Defined once Home Assistant's scoped element registry is in place**
+ * (ADR-0163 C7): in the Home Assistant app this file can run before the
+ * polyfill swaps the registry, and a definition made then is lost, which
+ * shows "Custom element doesn't exist". It waits for the polyfill (3 s at
+ * most), defines, and defines again a few times after, which does nothing
+ * once the element is there; a constructor the old registry already took is
+ * defined as a subclass. */
+function register() {
+  const define = () => {
+    if (customElements.get('gexis-player-card')) return;
+    try {
+      customElements.define('gexis-player-card', GexisPlayerCard);
+    } catch (e) {
+      try { customElements.define('gexis-player-card', class extends GexisPlayerCard {}); } catch (e2) { /* defined meanwhile */ }
+    }
+  };
+  let tries = 0;
+  const wait = () => {
+    if (window.CustomElementRegistryPolyfill || tries++ > 60) {
+      define();
+      [500, 2000, 6000, 15000].forEach((ms) => setTimeout(define, ms));
+    } else {
+      setTimeout(wait, 50);
+    }
+  };
+  wait();
+}
+
+if (!window.__gexisPlayerCard) {
+  window.__gexisPlayerCard = VERSION;
+  register();
   window.customCards = window.customCards || [];
   window.customCards.push({
     type: 'gexis-player-card',

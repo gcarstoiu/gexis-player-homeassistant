@@ -77,3 +77,34 @@ async def test_the_idle_screen_switched_off_on_the_player(
     await entry.runtime_data._on_state(state)
     await hass.async_block_till_done()
     assert hass.states.get("switch.living_room_idle_screen").state == STATE_UNAVAILABLE
+
+
+async def test_the_equaliser_on_and_off(hass: HomeAssistant, aioclient_mock, entry, state, no_socket) -> None:
+    state["equaliser"] = {"on": False, "sel": "flat", "presets": [], "own": []}
+    player = await setup(hass, aioclient_mock, entry, state)
+    assert hass.states.get("switch.living_room_equaliser").state == STATE_OFF
+    aioclient_mock.put(f"{BASE}/equaliser", json={})
+    await hass.services.async_call("switch", "turn_on", {ATTR_ENTITY_ID: "switch.living_room_equaliser"}, blocking=True)
+    puts = [(str(url), body) for method, url, body, _ in aioclient_mock.mock_calls if method == "PUT"]
+    assert puts == [(f"{BASE}/equaliser", {"on": True})]
+    state["equaliser"]["on"] = True
+    await player._on_state(state)
+    assert hass.states.get("switch.living_room_equaliser").state == STATE_ON
+
+
+async def test_the_equaliser_needs_no_screen(hass: HomeAssistant, aioclient_mock, entry, state, no_socket) -> None:
+    state["equaliser"] = {"on": True, "sel": "flat", "presets": [], "own": []}
+    aioclient_mock.get(f"{BASE}/player/status", json={**STATUS, "screen": False})
+    aioclient_mock.get(f"{BASE}/panel/dashboard", json={"shown": False, "by": None, "url": None})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await entry.runtime_data._on_state(state)
+    await hass.async_block_till_done()
+    assert hass.states.get("switch.living_room_equaliser").state == STATE_ON
+
+
+async def test_without_an_equaliser_the_switch_is_unavailable(
+    hass: HomeAssistant, aioclient_mock, entry, state, no_socket
+) -> None:
+    await setup(hass, aioclient_mock, entry, state)
+    assert hass.states.get("switch.living_room_equaliser").state == STATE_UNAVAILABLE
