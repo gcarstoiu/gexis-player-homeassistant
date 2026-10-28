@@ -29,6 +29,7 @@ class TooOld(GexisError):
 KEYS = ("up", "down", "left", "right", "ok", "back")
 UPDATE_FOR_KEYS = "This player is too old for the D-pad. Update it first: Settings → System → Software update on the player."
 UPDATE_FOR_EQUALISER = "This player is too old for the equaliser. Update it first: Settings → System → Software update on the player."
+UPDATE_FOR_GROUPS = "This player is too old to be grouped. Update it first: Settings → System → Software update on the player."
 
 
 class GexisPlayer:
@@ -155,6 +156,17 @@ class GexisPlayer:
     async def set_equaliser(self, changes: dict[str, Any]) -> None:
         """`on` or `sel`, for the output in use (ADR-0162 D9)."""
         await self._send("PUT", "/equaliser", changes, missing=UPDATE_FOR_EQUALISER)
+
+    async def join(self, player_id: str) -> None:
+        """Another player joined to this one's group (the player's ADR-0166)."""
+        await self._post("/group/join", {"player": player_id}, missing=UPDATE_FOR_GROUPS)
+
+    async def leave(self) -> None:
+        await self._post("/group/leave", missing=UPDATE_FOR_GROUPS)
+
+    async def undo(self) -> None:
+        """The group ended; the music stays on the player that leads."""
+        await self._post("/group/undo", missing=UPDATE_FOR_GROUPS)
 
     async def set_volume(self, percent: int) -> None:
         await self._post("/volume", {"percent": percent})

@@ -15,11 +15,13 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from . import GexisConfigEntry
 from .api import GexisError, GexisPlayer
+from .const import DOMAIN
 from .entity import GexisEntity
 
 #: A position further than this from where it should be is a seek.
@@ -123,7 +125,27 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
             )
         elif self._fixed_mute is not None:
             features |= MediaPlayerEntityFeature.VOLUME_MUTE
+        # The player's groups (its ADR-0166): Home Assistant's own join.
+        if self.player.status.get("multiroom"):
+            features |= MediaPlayerEntityFeature.GROUPING
         return features
+
+    def _entity_of(self, player_id: str) -> str | None:
+        return er.async_get(self.hass).async_get_entity_id("media_player", DOMAIN, player_id)
+
+    def _player_of(self, entity_id: str) -> str | None:
+        entry = er.async_get(self.hass).async_get(entity_id)
+        return entry.unique_id if entry is not None and entry.platform == DOMAIN else None
+
+    @property
+    def group_members(self) -> list[str] | None:
+        """The group this player is in, the player that leads first - the
+        players Home Assistant knows."""
+        group = self.state_dict.get("group")
+        if not group:
+            return None
+        members = [self._entity_of(m["id"]) for m in group.get("members") or []]
+        return [m for m in members if m]
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -228,3 +250,25 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
 
     async def async_media_seek(self, position: float) -> None:
         await self._run(self.player.seek(position))
+
+    async def async_join_players(self, group_members: list[str]) -> None:
+        """The players joined to this one's group: they stop what they play
+        and play this one's music."""
+        for entity_id in group_members:
+            player_id = self._player_of(entity_id)
+            if player_id is None:
+                raise HomeAssistantError(f"{entity_id} is not a Gexis Player")
+            if player_id != self.player.status.get("id"):
+                await self._run(self.player.join(player_id))
+
+    async def async_unjoin_player(self) -> None:
+        """This player out of its group. The player that leads has no leave:
+        unjoined, its group ends, and the music stays on it."""
+        group = self.state_dict.get("group") or {}
+        me = group.get("me")
+        if not group:
+            return
+        if me is not None and group.get("leader") == me:
+            await self._run(self.player.undo())
+        else:
+            await self._run(self.player.leave())
