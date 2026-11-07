@@ -33,3 +33,15 @@ hide_page:
       example: "cameras"
       selector:
         text:
+
+preload_page:
+  target:
+    entity:
+      integration: gexis
+      domain: media_player
+  fields:
+    url:
+      example: "http://homeassistant.local:8123/home-security/tv"
+      selector:
+        text:
+          type: url

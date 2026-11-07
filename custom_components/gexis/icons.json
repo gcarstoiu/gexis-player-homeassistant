@@ -44,6 +44,9 @@
     },
     "hide_page": {
       "service": "mdi:monitor-off"
+    },
+    "preload_page": {
+      "service": "mdi:monitor-arrow-down"
     }
   }
 }

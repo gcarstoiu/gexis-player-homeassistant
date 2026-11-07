@@ -49,4 +49,6 @@ class GexisPage(GexisEntity, BinarySensorEntity):
             "until": self._page.get("until"),
             "closed_id": closed.get("id"),
             "closed_by": closed.get("by"),
+            # Whether a page is kept loaded; never its address.
+            "preloaded": self._page.get("preloaded") is True,
         }

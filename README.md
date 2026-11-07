@@ -83,6 +83,25 @@ gets hot, or when a person asks the player for something else; then the
 screen is as it was. A second `show_page` with the same `id` starts its time
 again.
 
+For a page that has to be there at once - a doorbell does not wait for
+Home Assistant to load - the player can keep one page loaded and hidden;
+`gexis.show_page` with the same `url` then only reveals it, and every close
+hides it again:
+
+```yaml
+action: gexis.preload_page
+target:
+  entity_id: media_player.living_room
+data:
+  url: http://homeassistant.local:8123/home-security/tv   # empty or left out: none kept
+```
+
+The player loads it again after a restart; sending the same `url` again
+loads it afresh. A hidden page still reads itself as visible, so it has to
+stop its own video while it is not shown - from Home Assistant's own state,
+for example *Page* (`preloaded` says whether one is kept). It takes about
+60-90 MB of the player's memory.
+
 On the player, *Pages from Home Assistant* has to be on (*Settings →
 Display*); until then the action fails and says so, and *Page* is
 unavailable. Home Assistant has to allow its pages to be shown inside

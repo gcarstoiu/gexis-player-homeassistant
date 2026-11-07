@@ -27,6 +27,7 @@ from .const import (
     PAGE_MAX_S,
     PAGE_MIN_S,
     SERVICE_HIDE_PAGE,
+    SERVICE_PRELOAD_PAGE,
     SERVICE_SHOW_PAGE,
 )
 
@@ -47,6 +48,8 @@ SHOW_PAGE_SCHEMA = {
     vol.Optional(ATTR_SECONDS): vol.All(vol.Coerce(int), vol.Range(min=PAGE_MIN_S, max=PAGE_MAX_S)),
 }
 HIDE_PAGE_SCHEMA = {vol.Optional(ATTR_PAGE_ID): vol.All(cv.string, vol.Length(min=1, max=64))}
+#: The page to keep loaded; empty or left out clears it.
+PRELOAD_PAGE_SCHEMA = {vol.Optional(ATTR_URL): vol.Any(None, "", vol.All(cv.string, vol.Match(r"^https?://\S+$")))}
 
 type GexisConfigEntry = ConfigEntry[GexisPlayer]
 
@@ -54,8 +57,8 @@ type GexisConfigEntry = ConfigEntry[GexisPlayer]
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """**The card, served and added to the frontend** (ADR-0163 D1), once
     for every player: it is in the card picker with nothing to register.
-    **And a page on the player's screen** (ADR-0176): two actions on the
-    player's media player."""
+    **And a page on the player's screen** (ADR-0176): three actions on the
+    player's media player - show, hide, and the page to keep loaded."""
     service.async_register_platform_entity_service(
         hass, DOMAIN, SERVICE_SHOW_PAGE, entity_domain=MEDIA_PLAYER_DOMAIN,
         schema=SHOW_PAGE_SCHEMA, func="async_show_page",
@@ -63,6 +66,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     service.async_register_platform_entity_service(
         hass, DOMAIN, SERVICE_HIDE_PAGE, entity_domain=MEDIA_PLAYER_DOMAIN,
         schema=HIDE_PAGE_SCHEMA, func="async_hide_page",
+    )
+    service.async_register_platform_entity_service(
+        hass, DOMAIN, SERVICE_PRELOAD_PAGE, entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema=PRELOAD_PAGE_SCHEMA, func="async_preload_page",
     )
     if hass.http is None:  # no web server, as in tests
         return True

@@ -124,6 +124,45 @@ def test_every_action_and_field_is_described() -> None:
     services = yaml.safe_load((root / "services.yaml").read_text())
     text = json.loads((root / "translations" / "en.json").read_text())["services"]
     icons = json.loads((root / "icons.json").read_text())["services"]
-    assert set(services) == set(text) == set(icons) == {"show_page", "hide_page"}
+    assert set(services) == set(text) == set(icons) == {"show_page", "hide_page", "preload_page"}
     for name, spec in services.items():
         assert set(spec["fields"]) == set(text[name]["fields"]), name
+
+
+# --- one page kept loaded (ADR-0176's amendment) ----------------------------
+
+async def test_the_page_to_keep_reaches_the_player_and_empty_clears_it(
+    hass: HomeAssistant, aioclient_mock, entry, state, no_socket
+) -> None:
+    state["panel"]["pages"] = True
+    await setup(hass, aioclient_mock, entry, state)
+    aioclient_mock.post(f"{BASE}/panel/page/preload", json={"preloaded": True})
+    await hass.services.async_call("gexis", "preload_page", {ATTR_ENTITY_ID: ENTITY, "url": URL}, blocking=True)
+    await hass.services.async_call("gexis", "preload_page", {ATTR_ENTITY_ID: ENTITY, "url": ""}, blocking=True)
+    await hass.services.async_call("gexis", "preload_page", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+    assert _sent(aioclient_mock, "/panel/page/preload") == [{"url": URL}, {"url": None}, {"url": None}]
+
+
+async def test_a_page_to_keep_that_is_no_address_never_reaches_the_player(
+    hass: HomeAssistant, aioclient_mock, entry, state, no_socket
+) -> None:
+    await setup(hass, aioclient_mock, entry, state)
+    with pytest.raises(Exception):
+        await hass.services.async_call(
+            "gexis", "preload_page", {ATTR_ENTITY_ID: ENTITY, "url": "ftp://ha.example/x"}, blocking=True
+        )
+    assert _sent(aioclient_mock, "/panel/page/preload") == []
+
+
+async def test_the_page_sensor_says_whether_a_page_is_kept_never_its_address(
+    hass: HomeAssistant, aioclient_mock, entry, state, no_socket
+) -> None:
+    state["panel"]["pages"] = True
+    state["panel"]["page"] = {"shown": False, "id": None, "until": None, "seq": 0, "closed": None,
+                              "preloaded": False}
+    player = await setup(hass, aioclient_mock, entry, state)
+    assert hass.states.get(SENSOR).attributes["preloaded"] is False
+    state["panel"]["page"] = {**state["panel"]["page"], "seq": 1, "preloaded": True}
+    await player._on_state(state)
+    s = hass.states.get(SENSOR)
+    assert s.attributes["preloaded"] is True and URL not in repr(s.attributes)

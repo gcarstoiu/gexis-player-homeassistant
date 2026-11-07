@@ -196,6 +196,11 @@ class GexisPlayer:
         """Down; with `page_id`, only that page."""
         await self._post("/panel/page/hide", {"id": page_id} if page_id else None, missing=UPDATE_FOR_PAGES)
 
+    async def preload_page(self, url: str | None) -> None:
+        """The page the player keeps loaded and hidden, so a show of it is at
+        once; None clears it (ADR-0176's amendment, K1)."""
+        await self._post("/panel/page/preload", {"url": url or None}, missing=UPDATE_FOR_PAGES)
+
     @property
     def pages(self) -> bool:
         """Whether the player allows pages: its switch, on a player with a

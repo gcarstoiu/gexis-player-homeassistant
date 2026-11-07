@@ -235,3 +235,6 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
 
     async def async_hide_page(self, id: str | None = None) -> None:
         await self._run(self.player.hide_page(id))
+
+    async def async_preload_page(self, url: str | None = None) -> None:
+        await self._run(self.player.preload_page(url))

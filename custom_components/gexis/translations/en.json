@@ -42,6 +42,9 @@
           },
           "closed_by": {
             "name": "Last closed by"
+          },
+          "preloaded": {
+            "name": "Page kept loaded"
           }
         }
       }
@@ -111,6 +114,16 @@
         "id": {
           "name": "Name",
           "description": "Only the page of this name; any page if left empty."
+        }
+      }
+    },
+    "preload_page": {
+      "name": "Keep a page loaded",
+      "description": "Gives the player a page to keep loaded and hidden, so that Show a page on the screen with the same address shows it at once. Leave the address empty to stop keeping it. Needs Pages from Home Assistant switched on in the player's Settings → Display; the page has to stop its own video while hidden.",
+      "fields": {
+        "url": {
+          "name": "Address",
+          "description": "The page's address, as for Show a page on the screen; empty to stop keeping one."
         }
       }
     }
