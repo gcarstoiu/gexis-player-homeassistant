@@ -1,5 +1,10 @@
 {
   "entity": {
+    "binary_sensor": {
+      "page": {
+        "default": "mdi:monitor-eye"
+      }
+    },
     "button": {
       "home": {
         "default": "mdi:home"
@@ -31,6 +36,14 @@
       "equaliser_setting": {
         "default": "mdi:tune-vertical-variant"
       }
+    }
+  },
+  "services": {
+    "show_page": {
+      "service": "mdi:monitor-eye"
+    },
+    "hide_page": {
+      "service": "mdi:monitor-off"
     }
   }
 }

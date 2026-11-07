@@ -1,0 +1,35 @@
+show_page:
+  target:
+    entity:
+      integration: gexis
+      domain: media_player
+  fields:
+    url:
+      required: true
+      example: "http://homeassistant.local:8123/home-security/tv"
+      selector:
+        text:
+          type: url
+    id:
+      example: "cameras"
+      selector:
+        text:
+    seconds:
+      example: 120
+      selector:
+        number:
+          min: 10
+          max: 3600
+          unit_of_measurement: s
+          mode: box
+
+hide_page:
+  target:
+    entity:
+      integration: gexis
+      domain: media_player
+  fields:
+    id:
+      example: "cameras"
+      selector:
+        text:

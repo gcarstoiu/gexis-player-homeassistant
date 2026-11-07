@@ -6,14 +6,15 @@ play, pause, next and previous; volume and mute; the source playing; the
 equaliser, on or off, and its setting. On a player with a screen, four
 switches as well - the screen (display standby), the Home Assistant
 dashboard, the visualiser and the idle screen - three buttons (Home, Now
-playing and Lyrics) and a D-pad. And a card for dashboards, for every player
-in the home.
+playing and Lyrics), a D-pad, and actions that put a page of Home
+Assistant's on the screen for a while - the cameras when the doorbell rings.
+And a card for dashboards, for every player in the home.
 
 ## What it needs
 
 - Home Assistant 2026.3 or later.
 - Gexis Player 1.5.0 or later (the D-pad 1.6.0 or later; the equaliser,
-  seeking and mute with Fixed volume 1.7.0 or later).
+  seeking and mute with Fixed volume 1.7.0 or later; pages 1.15.0 or later).
   An older player is found, and asked to update first.
 
 ## Installing
@@ -46,9 +47,48 @@ example `livingroom.local`) and port 8090.
 | Home | Opens Home on the player's screen. |
 | Now playing, Lyrics | Opens Now Playing or the lyrics on the player's screen. Unavailable while no source is active. |
 | D-pad | A remote for the player's screen: `remote.send_command` with `up`, `down`, `left`, `right`, `ok`, `back` or `home`, with `num_repeats` and `delay_secs`. On while the screen is lit; turning it off or on is the screen's standby. Needs Gexis Player 1.6.0 or later; an older player is asked to update. |
+| Page | On while a page from Home Assistant is on the player's screen (below); `page_id` is its name, `until` when its time ends, `closed_id` and `closed_by` the last one's name and why it went (`touch`, `key`, `limit`, `asked`, `replaced`, `heat`, `off`). Unavailable while *Pages from Home Assistant* is off on the player. |
 
-The switches (the equaliser's apart), buttons and D-pad are unavailable on a
-player without a screen.
+The switches (the equaliser's apart), buttons, D-pad and Page are unavailable
+on a player without a screen.
+
+## A page on the player's screen
+
+Two actions on the player's media player put a page of Home Assistant's on
+its screen for a while and take it down - for example a view of the cameras
+when the doorbell rings:
+
+```yaml
+action: gexis.show_page
+target:
+  entity_id: media_player.living_room
+data:
+  url: http://homeassistant.local:8123/home-security/tv   # as the player reaches it
+  id: cameras          # a name for it; "page" if left out
+  seconds: 120         # 10 to 3600; 600 if left out
+```
+
+```yaml
+action: gexis.hide_page
+target:
+  entity_id: media_player.living_room
+data:
+  id: cameras          # only this page; any if left out
+```
+
+The page shows over whatever is on the screen, the music playing on, and a
+screen in standby wakes for it. It goes at a touch on the screen or a key on
+a remote, at the end of its time, with `gexis.hide_page`, when the player
+gets hot, or when a person asks the player for something else; then the
+screen is as it was. A second `show_page` with the same `id` starts its time
+again.
+
+On the player, *Pages from Home Assistant* has to be on (*Settings →
+Display*); until then the action fails and says so, and *Page* is
+unavailable. Home Assistant has to allow its pages to be shown inside
+another page and let the player in, as for the player's dashboard. Live
+video is heavy for the player's Raspberry Pi: show few cameras, in their
+smaller streams.
 
 ## The card
 

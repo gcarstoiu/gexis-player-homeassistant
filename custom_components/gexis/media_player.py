@@ -228,3 +228,10 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
 
     async def async_media_seek(self, position: float) -> None:
         await self._run(self.player.seek(position))
+
+    # ADR-0176: a page of Home Assistant's on the player's screen, for a while.
+    async def async_show_page(self, url: str, id: str | None = None, seconds: int | None = None) -> None:
+        await self._run(self.player.show_page(url, id, seconds))
+
+    async def async_hide_page(self, id: str | None = None) -> None:
+        await self._run(self.player.hide_page(id))

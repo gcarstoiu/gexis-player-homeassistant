@@ -7,7 +7,7 @@
  * The player's look by default. Everything goes through Home Assistant's own
  * services. */
 
-const VERSION = '0.5.0';
+const VERSION = '0.6.0';
 const FONTS = new URL('fonts/', import.meta.url).href;
 
 /* media_player supported_features */

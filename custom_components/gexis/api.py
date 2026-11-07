@@ -29,6 +29,7 @@ class TooOld(GexisError):
 KEYS = ("up", "down", "left", "right", "ok", "back")
 UPDATE_FOR_KEYS = "This player is too old for the D-pad. Update it first: Settings → System → Software update on the player."
 UPDATE_FOR_EQUALISER = "This player is too old for the equaliser. Update it first: Settings → System → Software update on the player."
+UPDATE_FOR_PAGES = "This player is too old to show a page. Update it first: Settings → System → Software update on the player."
 
 
 class GexisPlayer:
@@ -181,3 +182,25 @@ class GexisPlayer:
 
     async def visualiser(self, show: bool) -> None:
         await self._post(f"/peppy/{'show' if show else 'hide'}")
+
+    async def show_page(self, url: str, page_id: str | None = None, seconds: int | None = None) -> None:
+        """A page of Home Assistant's on the screen for a while (ADR-0176 P1)."""
+        body: dict[str, Any] = {"url": url}
+        if page_id:
+            body["id"] = page_id
+        if seconds is not None:
+            body["seconds"] = seconds
+        await self._post("/panel/page/show", body, missing=UPDATE_FOR_PAGES)
+
+    async def hide_page(self, page_id: str | None = None) -> None:
+        """Down; with `page_id`, only that page."""
+        await self._post("/panel/page/hide", {"id": page_id} if page_id else None, missing=UPDATE_FOR_PAGES)
+
+    @property
+    def pages(self) -> bool:
+        """Whether the player allows pages: its switch, on a player with a
+        screen - live from `/state`, else from `/player/status`."""
+        panel = (self.state or {}).get("panel") or {}
+        if "pages" in panel:
+            return panel["pages"] is True
+        return self.status.get("pages") is True

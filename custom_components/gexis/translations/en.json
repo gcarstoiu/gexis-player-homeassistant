@@ -27,6 +27,25 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "page": {
+        "name": "Page",
+        "state_attributes": {
+          "page_id": {
+            "name": "Page"
+          },
+          "until": {
+            "name": "Until"
+          },
+          "closed_id": {
+            "name": "Last page"
+          },
+          "closed_by": {
+            "name": "Last closed by"
+          }
+        }
+      }
+    },
     "button": {
       "home": {
         "name": "Home"
@@ -63,6 +82,36 @@
     "select": {
       "equaliser_setting": {
         "name": "Equaliser setting"
+      }
+    }
+  },
+  "services": {
+    "show_page": {
+      "name": "Show a page on the screen",
+      "description": "Puts a page of Home Assistant's on the player's screen for a while, over whatever it shows; the music plays on. A touch, a remote's key or its time takes it down. Needs Pages from Home Assistant switched on in the player's Settings → Display.",
+      "fields": {
+        "url": {
+          "name": "Address",
+          "description": "The page's address, as the player's browser reaches Home Assistant (the dashboard's address shows how)."
+        },
+        "id": {
+          "name": "Name",
+          "description": "A name for the page, so it can be taken down by name and seen on the Page sensor. 'page' if left empty."
+        },
+        "seconds": {
+          "name": "For how long",
+          "description": "Seconds it stays up, 10 to 3600; 600 if left empty."
+        }
+      }
+    },
+    "hide_page": {
+      "name": "Hide the page",
+      "description": "Takes the page down, and the player's screen shows what it showed before.",
+      "fields": {
+        "id": {
+          "name": "Name",
+          "description": "Only the page of this name; any page if left empty."
+        }
       }
     }
   }
