@@ -18,3 +18,8 @@ ATTR_SECONDS = "seconds"
 #: As the player takes them: 10 s to an hour.
 PAGE_MIN_S = 10
 PAGE_MAX_S = 3600
+
+#: ADR-0180: the heart - the internet radio station playing now, a favourite
+#: or no longer one.
+SERVICE_RADIO_FAVOURITE = "radio_favourite"
+ATTR_FAVOURITE = "favourite"

@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import Callable
 import logging
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import aiohttp
 
@@ -30,6 +30,8 @@ KEYS = ("up", "down", "left", "right", "ok", "back")
 UPDATE_FOR_KEYS = "This player is too old for the D-pad. Update it first: Settings → System → Software update on the player."
 UPDATE_FOR_EQUALISER = "This player is too old for the equaliser. Update it first: Settings → System → Software update on the player."
 UPDATE_FOR_PAGES = "This player is too old to show a page. Update it first: Settings → System → Software update on the player."
+UPDATE_FOR_RADIO = "This player is too old for internet radio. Update it first: Settings → System → Software update on the player."
+DIRECTORY_DOWN = "The station directory cannot be reached. The favourites still play."
 
 
 class GexisPlayer:
@@ -45,6 +47,10 @@ class GexisPlayer:
         self._session = session
         self._listeners: list[Callable[[], None]] = []
         self._revision: int | None = None
+        #: ADR-0180: the player's own internet radio favourites, read again
+        #: whenever `/state`'s `radio.favourites` revision moves.
+        self.favourites: list[dict[str, Any]] = []
+        self._favourites_revision: int | None = None
 
     @property
     def connected(self) -> bool:
@@ -90,8 +96,23 @@ class GexisPlayer:
             except GexisError:
                 pass
             await self._fetch_dashboard()
+        radio = state.get("radio")
+        if isinstance(radio, dict) and radio.get("favourites") != self._favourites_revision:
+            self._favourites_revision = radio.get("favourites")
+            await self._fetch_favourites()
         self.state = state
         self._notify()
+
+    async def _fetch_favourites(self) -> None:
+        try:
+            async with self._session.get(f"{self.base}/stations/favourites", timeout=TIMEOUT) as r:
+                r.raise_for_status()
+                body = await r.json(content_type=None)
+        except (aiohttp.ClientError, TimeoutError, ValueError):
+            return
+        favourites = body.get("favourites") if isinstance(body, dict) else None
+        if isinstance(favourites, list):
+            self.favourites = [f for f in favourites if isinstance(f, dict) and f.get("id") and f.get("name")]
 
     async def listen(self) -> None:
         """Follow `/state` until cancelled, reconnecting after a drop."""
@@ -110,6 +131,7 @@ class GexisPlayer:
             if self.state is not None:
                 self.state = None
                 self._revision = None
+                self._favourites_revision = None
                 self._notify()
             await asyncio.sleep(delay)
             delay = min(delay * 2, RETRY_MAX_S)
@@ -200,6 +222,52 @@ class GexisPlayer:
         """The page the player keeps loaded and hidden, so a show of it is at
         once; None clears it (ADR-0176's amendment, K1)."""
         await self._post("/panel/page/preload", {"url": url or None}, missing=UPDATE_FOR_PAGES)
+
+    # ADR-0180: internet radio, the player's own.
+
+    @property
+    def radio(self) -> bool:
+        """Whether the player has internet radio, switched on: it publishes
+        `radio`, and the source is available."""
+        state = self.state or {}
+        return "radio" in state and (state.get("available") or {}).get("radio") is True
+
+    async def stations(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """A list from the player's directory routes (`/stations/...`)."""
+        try:
+            async with self._session.get(f"{self.base}/stations{path}", params=params, timeout=TIMEOUT) as r:
+                if r.status == 404:
+                    raise GexisError(UPDATE_FOR_RADIO)
+                if r.status == 503:
+                    raise GexisError(DIRECTORY_DOWN)
+                r.raise_for_status()
+                body = await r.json(content_type=None)
+        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+            raise GexisError(str(err)) from err
+        return body if isinstance(body, dict) else {}
+
+    async def play_station(self, station: dict[str, Any]) -> None:
+        """A station a list gave; the radio takes the output, as any source."""
+        await self._post("/stations/play", {"station": station}, missing=UPDATE_FOR_RADIO)
+
+    async def play_favourite(self, station_id: str) -> None:
+        await self._post("/stations/play", {"favourite": station_id}, missing=UPDATE_FOR_RADIO)
+
+    async def add_favourite(self, station: dict[str, Any]) -> None:
+        await self._post("/stations/favourites", {"station": station}, missing=UPDATE_FOR_RADIO)
+
+    async def remove_favourite(self, station_id: str) -> None:
+        await self._send("DELETE", f"/stations/favourites/{quote(station_id, safe='')}", missing=UPDATE_FOR_RADIO)
+
+    async def logo(self, key: str) -> tuple[bytes, str] | None:
+        """A station's logo, as the player keeps it (`/stations/logo/<key>`)."""
+        try:
+            async with self._session.get(f"{self.base}/stations/logo/{quote(key, safe='')}", timeout=TIMEOUT) as r:
+                if r.status != 200:
+                    return None
+                return await r.read(), r.content_type
+        except (aiohttp.ClientError, TimeoutError):
+            return None
 
     @property
     def pages(self) -> bool:

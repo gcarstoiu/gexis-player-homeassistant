@@ -126,6 +126,16 @@
           "description": "The page's address, as for Show a page on the screen; empty to stop keeping one."
         }
       }
+    },
+    "radio_favourite": {
+      "name": "Favourite station",
+      "description": "The heart on the internet radio station playing now: makes it one of the player's favourites, or takes it out. Needs Gexis Player with internet radio.",
+      "fields": {
+        "favourite": {
+          "name": "Favourite",
+          "description": "On to keep the station as a favourite, off to take it out."
+        }
+      }
     }
   }
 }

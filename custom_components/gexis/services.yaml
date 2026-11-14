@@ -45,3 +45,15 @@ preload_page:
       selector:
         text:
           type: url
+
+radio_favourite:
+  target:
+    entity:
+      integration: gexis
+      domain: media_player
+  fields:
+    favourite:
+      required: true
+      example: true
+      selector:
+        boolean:

@@ -6,10 +6,11 @@ from pathlib import Path
 
 import voluptuous as vol
 
-from homeassistant.components.media_player import DOMAIN as MEDIA_PLAYER_DOMAIN
+from homeassistant.components import websocket_api
+from homeassistant.components.media_player import DATA_COMPONENT, DOMAIN as MEDIA_PLAYER_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, service
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -18,6 +19,7 @@ from homeassistant.loader import async_get_integration
 
 from .api import GexisError, GexisPlayer
 from .const import (
+    ATTR_FAVOURITE,
     ATTR_PAGE_ID,
     ATTR_SECONDS,
     ATTR_URL,
@@ -28,6 +30,7 @@ from .const import (
     PAGE_MIN_S,
     SERVICE_HIDE_PAGE,
     SERVICE_PRELOAD_PAGE,
+    SERVICE_RADIO_FAVOURITE,
     SERVICE_SHOW_PAGE,
 )
 
@@ -50,6 +53,8 @@ SHOW_PAGE_SCHEMA = {
 HIDE_PAGE_SCHEMA = {vol.Optional(ATTR_PAGE_ID): vol.All(cv.string, vol.Length(min=1, max=64))}
 #: The page to keep loaded; empty or left out clears it.
 PRELOAD_PAGE_SCHEMA = {vol.Optional(ATTR_URL): vol.Any(None, "", vol.All(cv.string, vol.Match(r"^https?://\S+$")))}
+#: ADR-0180: the heart on the station playing now.
+RADIO_FAVOURITE_SCHEMA = {vol.Required(ATTR_FAVOURITE): cv.boolean}
 
 type GexisConfigEntry = ConfigEntry[GexisPlayer]
 
@@ -71,6 +76,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         hass, DOMAIN, SERVICE_PRELOAD_PAGE, entity_domain=MEDIA_PLAYER_DOMAIN,
         schema=PRELOAD_PAGE_SCHEMA, func="async_preload_page",
     )
+    service.async_register_platform_entity_service(
+        hass, DOMAIN, SERVICE_RADIO_FAVOURITE, entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema=RADIO_FAVOURITE_SCHEMA, func="async_radio_favourite",
+    )
+    websocket_api.async_register_command(hass, ws_radio)
     if hass.http is None:  # no web server, as in tests
         return True
     from homeassistant.components.http import StaticPathConfig
@@ -84,6 +94,22 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         version = (await async_get_integration(hass, DOMAIN)).version
         add_extra_js_url(hass, f"{FRONTEND_URL}/{CARD_FILE}?v={version}")
     return True
+
+
+@websocket_api.websocket_command({vol.Required("type"): "gexis/radio", vol.Required("entity_id"): cv.entity_id})
+@callback
+def ws_radio(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """**The card's Radio view** (ADR-0180 item 10): the player's favourites
+    with their lines and logos, and which plays - what the media browser
+    cannot carry."""
+    from .media_player import GexisMediaPlayer
+
+    component = hass.data.get(DATA_COMPONENT)
+    entity = component.get_entity(msg["entity_id"]) if component else None
+    if not isinstance(entity, GexisMediaPlayer):
+        connection.send_error(msg["id"], websocket_api.ERR_NOT_FOUND, "Not a Gexis Player")
+        return
+    connection.send_result(msg["id"], entity.card_radio())
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: GexisConfigEntry) -> bool:

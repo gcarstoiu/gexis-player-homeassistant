@@ -47,6 +47,9 @@
     },
     "preload_page": {
       "service": "mdi:monitor-arrow-down"
+    },
+    "radio_favourite": {
+      "service": "mdi:heart"
     }
   }
 }
