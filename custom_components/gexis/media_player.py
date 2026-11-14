@@ -195,6 +195,12 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
             return MediaPlayerState.PLAYING
         if transport == "paused":
             return MediaPlayerState.PAUSED
+        if (transport == "stopped" and self.state_dict.get("active") == "radio"
+                and (self.state_dict.get("radio") or {}).get("station")):
+            # A station stops rather than pauses (ADR-0180), and the player
+            # keeps it: Play starts it again. So it shows as paused, with
+            # Play, not as nothing playing (George, 2026-11-14).
+            return MediaPlayerState.PAUSED
         return MediaPlayerState.IDLE
 
     @property

@@ -207,6 +207,33 @@ async def test_the_heart_with_nothing_playing_is_refused(hass: HomeAssistant, ai
                                        blocking=True)
 
 
+async def test_a_stopped_station_shows_as_paused_and_play_starts_it(hass: HomeAssistant, aioclient_mock, entry,
+                                                                   state, no_socket, favourites_route) -> None:
+    """A station stops rather than pauses, and the player keeps it: shown as
+    paused, with Play, rather than as nothing playing (George, 2026-11-14)."""
+    stopped = radio_state(state)
+    stopped["metadata"]["transport"] = "stopped"
+    stopped["radio"]["state"] = "stopped"
+    stopped["controls"] = {"available": ["next", "pause", "play", "previous"]}
+    await setup(hass, aioclient_mock, entry, stopped)
+    s = hass.states.get(ENTITY)
+    assert s.state == "paused"
+    assert MediaPlayerEntityFeature.PLAY in MediaPlayerEntityFeature(s.attributes["supported_features"])
+    aioclient_mock.post(f"{BASE}/transport/play", json={})
+    await hass.services.async_call("media_player", "media_play", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
+    posts = [str(url) for method, url, *_ in aioclient_mock.mock_calls if method == "POST"]
+    assert posts == [f"{BASE}/transport/play"]
+
+
+async def test_another_source_stopped_is_still_idle(hass: HomeAssistant, aioclient_mock, entry, state,
+                                                    no_socket) -> None:
+    stopped = copy.deepcopy(state)
+    stopped["metadata"]["transport"] = "stopped"
+    await setup(hass, aioclient_mock, entry, stopped)
+    assert stopped["active"] and stopped["active"] != "radio"
+    assert hass.states.get(ENTITY).state == "idle"
+
+
 def test_a_station_carries_itself_through_its_id() -> None:
     assert station_of(station_id(LISTED)) == {k: v for k, v in LISTED.items() if k != "favourite"}
     assert station_of("gexis:station/!!!") is None

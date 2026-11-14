@@ -77,7 +77,8 @@ data:
 ```
 
 While a station plays, Next and Previous step through the favourites (for a
-station that is not one they are greyed), and Pause stops it. The media
+station that is not one they are greyed), and Pause stops it. A stopped
+station shows as paused, and Play starts it again. The media
 player's `radio` attribute says which station plays, whether it is a
 favourite, and its state: `playing`, `connecting`, `reconnecting`, `stopped`
 or `not_answering`.
