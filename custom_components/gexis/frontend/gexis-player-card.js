@@ -4,8 +4,10 @@
  * no dependency. The full form is the phone's remote (ADR-0164,
  * design/source/21) without its Remote / Settings switch, the D-pad alone in
  * the touch area (ADR-0163 15-17); the compact form is design/source/19's.
- * The player's look by default. Everything goes through Home Assistant's own
- * services. */
+ * On a player with internet radio, a Now playing · Radio switch under the
+ * player and a Radio view with its favourites (ADR-0180, design/source/31
+ * C01-C06). The player's look by default. Everything goes through Home
+ * Assistant's own services. */
 
 const VERSION = '0.6.0';
 const FONTS = new URL('fonts/', import.meta.url).href;
@@ -21,6 +23,7 @@ const SOURCES = {
   spotify: { name: 'Spotify', ink: 'var(--gx-src-spotify)' },
   bluetooth: { name: 'Bluetooth', ink: 'var(--gx-src-bluetooth)' },
   plexamp: { name: 'Plexamp', ink: 'var(--gx-src-plexamp)' },
+  radio: { name: 'Radio', ink: 'var(--gx-radio)' },
   other: { name: '', ink: 'var(--gx-ink-2)' },
 };
 
@@ -80,6 +83,23 @@ const EQ_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="tr
 const svg = (d, size, extra = '') =>
   `<svg viewBox="0 0 24 24" width="${size}" height="${size}" ${extra} aria-hidden="true"><path d="${d}" fill="currentColor"></path></svg>`;
 
+/* Internet radio's glyphs (design/source/31): the radio mark, a dot between
+ * two pairs of arcs, also the picture of a station with no logo; the heart,
+ * an outline or filled; the visualiser's bars beside *Playing*; Stop, as a
+ * station stops rather than pauses. */
+const radioMark = (size, width = 2) =>
+  `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:block;flex-shrink:0"><circle cx="12" cy="12" r="2.3" fill="currentColor" stroke="none"></circle><path d="M8.1 8.1a5.5 5.5 0 0 0 0 7.8M15.9 8.1a5.5 5.5 0 0 1 0 7.8M5.1 5.1a9.8 9.8 0 0 0 0 13.8M18.9 5.1a9.8 9.8 0 0 1 0 13.8"></path></svg>`;
+const heart = (filled, size, width = 2) => filled
+  ? `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" style="display:block;flex-shrink:0"><path d="M12 20.6s-7.6-4.7-9.4-9.4C1.3 7.9 3.3 4.4 6.9 4.4c2.1 0 3.7 1.2 5.1 3 1.4-1.8 3-3 5.1-3 3.6 0 5.6 3.5 4.3 6.8-1.8 4.7-9.4 9.4-9.4 9.4z" fill="var(--gx-favourite)"></path></svg>`
+  : `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:block;flex-shrink:0"><path d="M12 20s-7.2-4.5-8.9-8.9C1.9 8 3.7 5 7 5c2 0 3.5 1.1 5 2.9C13.5 6.1 15 5 17 5c3.3 0 5.1 3 3.9 6.1C19.2 15.5 12 20 12 20z"></path></svg>`;
+const ON_AIR = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:block;flex-shrink:0"><path d="M6 19v-6M10 19V7M14 19v-9M18 19v-4"></path></svg>';
+const stop = (size) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"></rect></svg>`;
+/* A logo smaller than this is drawn at its own size on the plate, never
+ * enlarged (design/source/31, StationLogo). */
+const LOGO_NATIVE_MAX = 64;
+/* The station's states in which it sounds, or is on its way to. */
+const SOUNDING = ['playing', 'connecting', 'reconnecting'];
+
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 const mmss = (s) => {
@@ -96,7 +116,19 @@ function sourceKind(name) {
   if (s.includes('spotify')) return 'spotify';
   if (s.includes('bluetooth')) return 'bluetooth';
   if (s.includes('plex')) return 'plexamp';
+  if (s.includes('radio')) return 'radio';
   return 'other';
+}
+
+/* A player's source kind from its state: internet radio's source is the
+ * favourite playing, by its name, or *Internet radio* for another station
+ * (ADR-0180 item 10); the `radio` attribute is there while the player has it. */
+function kindOf(st) {
+  const a = st?.attributes || {};
+  const radio = a.radio && typeof a.radio === 'object' ? a.radio : null;
+  if (radio && radio.station && Array.isArray(a.source_list) && a.source_list.includes(a.source)) return 'radio';
+  const kind = sourceKind(a.source);
+  return kind === 'radio' && !radio ? 'other' : kind;
 }
 
 /* A source's mark, at the state line's size (14) or the artwork well's. */
@@ -114,6 +146,7 @@ function sourceMark(kind, size) {
     const [d, b, f] = k === 'well' ? [38, 3, 19] : k === 'mid' ? [24, 2, 12] : [14, 1.5, 8];
     return `<span class="plex" style="width:${d}px;height:${d}px;border-width:${b}px;font-size:${f}px">P</span>`;
   }
+  if (kind === 'radio') return radioMark(size);
   return '';
 }
 
@@ -150,7 +183,7 @@ function siblings(hass, id) {
 function stateLine(st) {
   if (!st || st.state === 'unavailable' || st.state === 'unknown') return 'Unavailable';
   if (st.state === 'playing' || st.state === 'paused') {
-    const kind = sourceKind(st.attributes.source);
+    const kind = kindOf(st);
     const name = kind && kind !== 'other' ? SOURCES[kind].name : st.attributes.source;
     return (st.state === 'paused' ? 'Paused' : 'Playing') + (name ? ` · ${name}` : '');
   }
@@ -202,6 +235,13 @@ const STYLE = `
   --gexis-card-scrim: rgba(4,8,10,0.55);
   --gexis-card-warn: #e0a758;
   --gexis-card-play-glow: 0 0 22px rgba(242,164,143,0.22),0 12px 30px rgba(242,164,143,0.35);
+  --gexis-card-ink-3: rgba(233,238,242,0.60);
+  --gexis-card-radio: #8fc4d8;
+  --gexis-card-favourite: #e8a0b4;
+  --gexis-card-dash: rgba(233,238,242,0.20);
+  --gexis-card-logo-plate: rgba(233,238,242,0.08);
+  --gexis-card-logo-plate-line: rgba(233,238,242,0.14);
+  --gexis-card-kicker-track: 0.16em;
 }
 .root {
   --gx-bg: var(--gexis-card-background,var(--ha-card-background,var(--card-background-color,#fff)));
@@ -244,6 +284,21 @@ const STYLE = `
   --gx-scrim: var(--gexis-card-scrim,rgba(0,0,0,0.4));
   --gx-warn: var(--gexis-card-warn,var(--warning-color,#ffa600));
   --gx-play-glow: var(--gexis-card-play-glow,none);
+  /* Internet radio (design/source/31 §7): the radio's mark and a station's
+   * fallback on its tint, the heart, the third ink of the kicker, meta and
+   * note, the empty plate's dashes, a logo's plate; the view chosen and the
+   * station playing on the accent. */
+  --gx-ink-3: var(--gexis-card-ink-3,var(--secondary-text-color,#727272));
+  --gx-radio: var(--gexis-card-radio,oklch(0.55 0.08 225));
+  --gx-radio-ground: color-mix(in srgb,var(--gx-radio) 14%,transparent);
+  --gx-radio-line: color-mix(in srgb,var(--gx-radio) 30%,transparent);
+  --gx-favourite: var(--gexis-card-favourite,oklch(0.62 0.15 0));
+  --gx-dash: var(--gexis-card-dash,color-mix(in srgb,var(--gx-ink) 22%,transparent));
+  --gx-plate: var(--gexis-card-logo-plate,rgba(127,127,127,0.1));
+  --gx-plate-line: var(--gexis-card-logo-plate-line,rgba(127,127,127,0.2));
+  --gx-kicker-track: var(--gexis-card-kicker-track,var(--gx-label-track));
+  --gx-view: color-mix(in srgb,var(--gx-accent) 18%,transparent);
+  --gx-on-air: color-mix(in srgb,var(--gx-accent) 12%,transparent);
   container-type: inline-size;
   position: relative; box-sizing: border-box; width: 100%;
   background: var(--gx-bg); color: var(--gx-ink);
@@ -503,6 +558,79 @@ button[disabled] { cursor: default; }
 .rm-menu button.current { background: var(--gx-button); }
 .rm-menu .mark { width: 30px; height: 30px; }
 .rm-menu .who .n { font-size: 16px; font-weight: 700; }
+
+/* ---- Internet radio (ADR-0180, design/source/31 §7, C01-C06) ---- */
+.views { position: relative; display: flex; height: 40px; padding: 3px; box-sizing: border-box; border-radius: 20px;
+  background: var(--gx-button); box-shadow: inset 0 0 0 1px var(--gx-button-line); }
+.vw { flex: 1 1 0; min-width: 0; height: 34px; border-radius: 17px; gap: 8px; font-size: 14px; font-weight: 600; color: var(--gx-ink-2); white-space: nowrap; }
+.vw.on { background: var(--gx-view); color: var(--gx-accent); }
+.views.compact { height: 36px; border-radius: 18px; }
+.views.compact .vw { height: 30px; border-radius: 15px; }
+.rm-views { position: relative; padding: 2px 16px 14px; }
+.c-views { position: relative; padding: 12px 16px 4px; }
+.rd { position: relative; display: flex; flex-direction: column; gap: 14px; padding: 0 16px 16px; }
+.rd-label { font-family: var(--gx-label-font); font-size: 12px; font-weight: 400; letter-spacing: var(--gx-kicker-track); text-transform: var(--gx-label-case); color: var(--gx-ink-3); }
+.rd-list { display: grid; grid-template-columns: minmax(0,1fr); gap: 2px 12px; margin-top: -6px; }
+@container (min-width: 600px) { .rd-list { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+.fav { justify-content: flex-start; gap: 12px; min-height: 56px; width: 100%; min-width: 0; padding: 8px 10px; border-radius: 12px; text-align: left; }
+.fav.on { background: var(--gx-on-air); }
+.fav-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fav-n { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fav-m { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--gx-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fav-m > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.fav.on .fav-n, .fav.on .fav-m { color: var(--gx-accent); }
+@media (hover: hover) { .fav:not(.on):hover { background: var(--gx-fill); } }
+.fav:not(.on):active { background: var(--gx-fill-2); }
+.rd-note { font-size: 13px; line-height: 1.4; color: var(--gx-ink-3); text-wrap: pretty; }
+.lg { position: relative; box-sizing: border-box; flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; background: var(--gx-plate); }
+.lg img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.lg.tiny { box-shadow: inset 0 0 0 1px var(--gx-plate-line); }
+.lg.none { background: var(--gx-radio-ground); box-shadow: inset 0 0 0 1px var(--gx-radio-line); color: var(--gx-radio); }
+.rd-tiles { display: flex; gap: 10px; margin: 12px 14px 14px; padding: 2px; overflow-x: auto; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg,#000 85%,transparent); mask-image: linear-gradient(90deg,#000 85%,transparent); }
+.rd-tiles::-webkit-scrollbar { display: none; }
+.rd-tiles::after { content: ''; flex: 0 0 15%; }
+.rd-tiles.wait { height: 76px; }
+.tile { width: 64px; flex-direction: column; justify-content: flex-start; gap: 5px; font-size: 11px; font-weight: 600; }
+.tile-lg { display: block; border-radius: 12px; }
+.tile.on .tile-lg { box-shadow: 0 0 0 2px var(--gx-accent); }
+.tile-n { max-width: 64px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--gx-ink-2); }
+.tile.on .tile-n { color: var(--gx-accent); }
+.tile:active .tile-lg { transform: scale(0.95); }
+.rd-empty { display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 12px; border: 1.5px dashed var(--gx-dash); }
+.rd-et { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; }
+.rd-et svg { color: var(--gx-favourite); }
+.rd-en { font-size: 13px; line-height: 1.45; color: var(--gx-ink-2); text-wrap: pretty; }
+.c-radio { position: relative; }
+.c-radio .rd-empty { margin: 12px 16px 16px; }
+/* Now playing, a station (C06; the phone's H17 and H20): the heart at the
+ * transport's right; beside the cover the row packs to the left, as the
+ * phone's does, so the heart fits. */
+.rm-side.radio { flex-basis: 202px; min-width: 202px; }
+.rm-transport.radio { justify-content: flex-start; gap: 8px; margin: 0 -4px 0 -2px; }
+.rm-transport.radio .rm-skip { width: 42px; height: 42px; }
+.rm-transport.radio.big { justify-content: space-between; gap: 0; margin: 0; }
+.rm-transport.radio.big .rm-skip { width: 64px; height: 64px; }
+.rm-heart { width: 44px; height: 44px; margin-left: auto; border-radius: 50%; background: var(--gx-skip); color: var(--gx-ink-3); }
+.rm-heart:active { transform: scale(0.95); }
+.rm-transport.big .rm-heart, .rm-room { width: 52px; height: 52px; flex-shrink: 0; margin-left: 0; }
+.rm-transport.radio:not(.big) .rm-room { display: none; }
+/* A dashboard column (300): the row needs 208 beside a cover of at least 96,
+ * so on a narrower card it goes under the cover and the title, the three
+ * centred and the heart at the right. */
+@container (max-width: 345px) {
+  .rm-now.radio { flex-wrap: wrap; row-gap: 12px; }
+  .rm-now.radio .rm-side { display: contents; }
+  .rm-now.radio .rm-text { flex: 1 1 0; min-width: 0; align-self: center; }
+  .rm-now.radio .rm-cover { width: 96px; }
+  .rm-now.radio .rm-transport { flex: 1 1 100%; justify-content: space-between; margin: 0; }
+  .rm-now.radio .rm-transport .rm-room { display: block; width: 44px; height: 44px; }
+  .rm-now.radio .rm-transport .rm-heart { margin-left: 0; }
+}
+.rm-artist.station { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.rm-cover .lg, .c-well .lg { position: absolute; inset: 0; border-radius: inherit; }
+.rm-cover .lg.none, .c-well .lg.none { color: var(--gx-radio); }
+.c-heart { color: var(--gx-ink-3); }
 `;
 
 /* The player's look names Nunito Sans and IBM Plex Mono; Home Assistant has
@@ -530,10 +658,19 @@ class GexisPlayerCard extends HTMLElement {
     this._eqOpen = false;        // the full form's EQ sheet
     this._sent = null;           // { text, until }
     this._drag = null;           // the volume while a finger is on it
+    this._tab = 'now';           // the view chosen on this card: now or radio (ADR-0180)
+    this._radio = new Map();     // per player, gexis/radio's last answer
+    this._radioSeen = null;      // the state object the last answer was asked for
+    this._radioAsking = null;    // the player asked about, while an answer is awaited
+    this._radioAgain = false;    // the state changed meanwhile: ask once more
+    this._logoSize = new Map();  // a tiny logo's own size, by its address
+    this._logoFailed = new Set();
     this._html = '';
     this.shadowRoot.addEventListener('click', (e) => this._onClick(e));
     this.shadowRoot.addEventListener('pointerdown', (e) => this._onPointer(e));
     this.shadowRoot.addEventListener('keydown', (e) => this._onKey(e));
+    this.shadowRoot.addEventListener('load', (e) => this._onLogo(e, true), true);
+    this.shadowRoot.addEventListener('error', (e) => this._onLogo(e, false), true);
   }
 
   static getConfigForm() {
@@ -583,7 +720,7 @@ class GexisPlayerCard extends HTMLElement {
   }
 
   getCardSize() {
-    return this._config.form === 'compact' ? 4 : 14;
+    return this._config.form === 'compact' ? (this._v?.radio ? 5 : 4) : 14;
   }
 
   getGridOptions() {
@@ -610,7 +747,11 @@ class GexisPlayerCard extends HTMLElement {
     const a = st.attributes || {};
     const unreachable = st.state === 'unavailable' || st.state === 'unknown';
     const active = st.state === 'playing' || st.state === 'paused';
-    const kind = active ? sourceKind(a.source) : null;
+    const kind = active ? kindOf(st) : null;
+    /* Internet radio (ADR-0180): the view switch while the player has it,
+     * the heart and Stop while a station plays. */
+    const radio = !unreachable && a.radio && typeof a.radio === 'object' ? a.radio : null;
+    const station = kind === 'radio' && radio ? { favourite: radio.favourite === true } : null;
     const feat = Number(a.supported_features) || 0;
     const has = (f) => (feat & f) !== 0;
     const sib = siblings(hass, id);
@@ -642,12 +783,17 @@ class GexisPlayerCard extends HTMLElement {
       own: eqSel.attributes.own || [],
       label: eqSw.state === 'on' ? eqSel.state : 'Off',
     } : null;
+    /* A station goes on the artist's line; when it sends nothing it is the
+     * title, and once is enough (the phone's H17). */
+    const title = active ? (a.media_title || (kind && kind !== 'other' ? SOURCES[kind].name : a.source) || 'Playing') : 'Nothing playing';
+    const byStation = station ? [a.media_artist, a.media_album_name !== title ? a.media_album_name : null].filter(Boolean).join(' · ') : null;
     return {
-      id, ids, st, a, unreachable, active, kind, art, duration, hasPos,
+      id, ids, st, a, unreachable, active, kind, art, duration, hasPos, radio, station,
+      tab: radio && this._tab === 'radio' ? 'radio' : 'now',
       name: playerName(hass, id),
       line: stateLine(st),
-      title: active ? (a.media_title || (kind && kind !== 'other' ? SOURCES[kind].name : a.source) || 'Playing') : 'Nothing playing',
-      artist: active ? a.media_artist || '' : '',
+      title,
+      artist: active ? (station ? byStation : a.media_artist || '') : '',
       album: active ? a.media_album_name || '' : '',
       playing: st.state === 'playing',
       prev: active && has(F.PREVIOUS_TRACK),
@@ -672,12 +818,15 @@ class GexisPlayerCard extends HTMLElement {
   _render() {
     if (!this._hass || this._drag !== null || this._seeking) return;
     const v = this._view();
+    if (v && v.tab === 'radio') this._askRadio(v);
     const html = v ? this._markup(v) : '<div class="root"><div class="unreachable"><div><div class="t">No Gexis player</div><div class="n">Add a player under Settings → Devices &amp; services.</div></div></div></div>';
     if (html === this._html) { this._tickPosition(); return; }
     this._html = html;
     this._v = v;
     const chips = this.shadowRoot.querySelector('[data-chips]');
     const left = chips ? chips.scrollLeft : null;
+    const tiles = this.shadowRoot.querySelector('.rd-tiles');
+    const tilesLeft = tiles ? tiles.scrollLeft : 0;
     this.shadowRoot.innerHTML = `<style>${STYLE}</style>${html}`;
     const now = this.shadowRoot.querySelector('[data-chips]');
     if (now && left !== null) now.scrollLeft = left;
@@ -685,7 +834,70 @@ class GexisPlayerCard extends HTMLElement {
       const sel = now.querySelector('.rm-chip.sel');
       if (sel && sel.offsetLeft + sel.offsetWidth > now.clientWidth - 40) now.scrollLeft = sel.offsetLeft - 120;
     }
+    const nowTiles = this.shadowRoot.querySelector('.rd-tiles');
+    if (nowTiles && tilesLeft) nowTiles.scrollLeft = tilesLeft;
     this._tickPosition();
+  }
+
+  /* **The favourites, asked again whenever the player's state changes**
+   * while the Radio view shows (ADR-0180): a favourite added or removed,
+   * the heart, a station started all change it. One question at a time; a
+   * change meanwhile asks once more when the answer is in. */
+  _askRadio(v) {
+    if (v.st === this._radioSeen) return;
+    if (this._radioAsking) { this._radioAgain = true; return; }
+    this._radioSeen = v.st;
+    this._radioAgain = false;
+    const id = v.id;
+    this._radioAsking = id;
+    Promise.resolve()
+      .then(() => this._hass.callWS({ type: 'gexis/radio', entity_id: id }))
+      .then((answer) => { if (answer && Array.isArray(answer.favourites)) this._radio.set(id, answer); })
+      .catch(() => { /* kept as it was; the next change asks again */ })
+      .finally(() => {
+        this._radioAsking = null;
+        if (this._radioAgain) this._radioSeen = null;
+        this._render();
+      });
+  }
+
+  /* A station's logo, loaded: one smaller than LOGO_NATIVE_MAX is drawn at
+   * its own size on the plate; one that fails gives way to the radio mark. */
+  _onLogo(e, loaded) {
+    const img = e.target;
+    if (!img || img.tagName !== 'IMG' || !img.dataset.logo) return;
+    const src = img.getAttribute('src');
+    const box = img.closest('.lg');
+    if (!loaded) {
+      this._logoFailed.add(src);
+      if (box) {
+        box.classList.add('none');
+        box.innerHTML = radioMark(Math.round(Number(img.dataset.logo) * 0.46));
+      }
+      return;
+    }
+    const n = Math.max(img.naturalWidth, img.naturalHeight);
+    if (!n || n >= LOGO_NATIVE_MAX || this._logoSize.has(src)) return;
+    this._logoSize.set(src, n);
+    const side = Math.min(n, Number(img.dataset.logo));
+    img.style.cssText = `position:static;width:${side}px;height:${side}px;object-fit:contain`;
+    if (box) box.classList.add('tiny');
+  }
+
+  /* `<img>` for a station's picture in a box `side` wide: a tiny one at its
+   * own size once it is known. */
+  _logoImg(src, side, cls = '') {
+    const n = this._logoSize.get(src);
+    const style = n ? ` style="position:static;width:${Math.min(n, side)}px;height:${Math.min(n, side)}px;object-fit:contain"` : '';
+    return `<img${cls ? ` class="${cls}"` : ''} src="${esc(src)}" alt="" data-logo="${side}" draggable="false"${style}>`;
+  }
+
+  /* StationLogo (design/source/31): the logo on the plate, filling its tile;
+   * none, or one that failed, the radio mark on the radio's tint. */
+  _logo(src, side, radius, mark) {
+    const box = `width:${side}px;height:${side}px;border-radius:${radius}px`;
+    if (!src || this._logoFailed.has(src)) return `<span class="lg none" style="${box}">${radioMark(mark)}</span>`;
+    return `<span class="lg${this._logoSize.has(src) ? ' tiny' : ''}" style="${box}">${this._logoImg(src, side)}</span>`;
   }
 
   /* ---- markup, region by region (data-gexis-card names the design's) ---- */
@@ -712,22 +924,100 @@ class GexisPlayerCard extends HTMLElement {
         <div style="display:flex;flex-direction:column;gap:3px;min-width:0"><div class="t">Can’t reach ${esc(v.name)}</div>
         <div class="n">Home Assistant reconnects when the player is back on the network.</div></div></div>`;
     } else {
-      h += this._compact(v, src);
+      if (v.radio) h += `<div class="c-views">${this._views(v, true)}</div>`;
+      h += v.tab === 'radio' ? this._radioCompact(v) : this._compact(v, src);
     }
     if (this._menu && multi) h += this._switcherMenu(v);
     return h + '</div>';
   }
 
+  /* ---- Internet radio: the view switch and the Radio view (ADR-0180,
+   * design/source/31 §7) ---- */
+
+  /* *Now playing · Radio* under the player, 40 tall (36 compact). */
+  _views(v, compact) {
+    const b = (key, label, glyph) => `<button class="vw${v.tab === key ? ' on' : ''}" data-act="tab" data-key="${key}" aria-pressed="${v.tab === key}">${glyph}<span>${label}</span></button>`;
+    return `<div class="views${compact ? ' compact' : ''}" data-gexis-card="views" role="group" aria-label="View">
+      ${b('now', 'Now playing', svg(P.note, 16))}${b('radio', 'Radio', radioMark(16))}</div>`;
+  }
+
+  /* gexis/radio's answer for the player shown, the station sounding marked
+   * by the media player's own attribute, which is newer. */
+  _favourites(v) {
+    const answer = this._radio.get(v.id);
+    if (!answer) return null;
+    const r = v.radio;
+    const playing = answer.playing && r && r.station === answer.playing && SOUNDING.includes(r.state) ? answer.playing : null;
+    return { list: answer.favourites, playing };
+  }
+
+  /* C05: none yet - the dashed plate with the heart. */
+  _favouritesEmpty() {
+    return `<div class="rd-empty" data-gexis-card="favourites-empty">
+      <span class="rd-et">${heart(false, 18, 2.2)}No favourites yet</span>
+      <span class="rd-en">Add them with the heart on the player’s screen or its phone remote.</span></div>`;
+  }
+
+  /* C01, C03, C04: the favourites as rows - logo, name, its line; the one
+   * playing on the accent with *Playing*. A tap plays. Two columns on a
+   * card 600 wide or more. */
+  _radioFull(v) {
+    const fav = this._favourites(v);
+    let h = '<div class="rd" data-gexis-card="radio">';
+    if (fav && fav.list.length) {
+      h += `<div class="rd-label">Favourites · ${fav.list.length}</div><div class="rd-list" data-gexis-card="favourites">`;
+      h += fav.list.map((f) => {
+        const on = f.id === fav.playing;
+        const meta = on ? `${ON_AIR}<span>Playing</span>` : `<span>${esc(f.meta || '')}</span>`;
+        return `<button class="fav${on ? ' on' : ''}" data-act="station" data-cid="${esc(f.content_id)}" data-gexis-card="favourite" ${on ? 'aria-current="true"' : ''} aria-label="${esc(f.name)}${on ? ', playing' : ''}">
+          ${this._logo(f.thumbnail, 40, 10, 18)}<span class="fav-t"><span class="fav-n">${esc(f.name)}</span><span class="fav-m">${meta}</span></span></button>`;
+      }).join('');
+      h += '</div>';
+    } else if (fav) {
+      h += this._favouritesEmpty();
+    }
+    return `${h}<div class="rd-note">Every other station is in Home Assistant’s media browser.</div></div>`;
+  }
+
+  /* C02: logo tiles 56 in 64 px columns, sideways; the one playing ringed;
+   * the row fades over its last 15 %. */
+  _radioCompact(v) {
+    const fav = this._favourites(v);
+    let h = '<div class="c-radio" data-gexis-card="radio">';
+    if (!fav) h += '<div class="rd-tiles wait"></div>';
+    else if (!fav.list.length) h += this._favouritesEmpty();
+    else {
+      h += `<div class="rd-tiles" data-gexis-card="favourites">${fav.list.map((f) => {
+        const on = f.id === fav.playing;
+        return `<button class="tile${on ? ' on' : ''}" data-act="station" data-cid="${esc(f.content_id)}" data-gexis-card="favourite" ${on ? 'aria-current="true"' : ''} aria-label="${esc(f.name)}${on ? ', playing' : ''}">
+          <span class="tile-lg">${this._logo(f.thumbnail, 56, 12, 26)}</span><span class="tile-n">${esc(f.name)}</span></button>`;
+      }).join('')}</div>`;
+    }
+    return h + '</div>';
+  }
+
+  /* The heart on the station playing (C06): an outline, or filled in the
+   * favourite's colour. */
+  _heart(v, cls, size) {
+    const on = v.station.favourite;
+    return `<button class="${cls}" data-act="heart" aria-label="${on ? 'Remove from favourites' : 'Add to favourites'}" aria-pressed="${on}">${heart(on, size)}</button>`;
+  }
+
   _well(v, src) {
+    if (v.art && v.station) return `<div class="c-well">${this._logoImg(v.art, 56, 'art')}</div>`;
     if (v.art) return `<div class="c-well"><img class="art" src="${esc(v.art)}" alt=""></div>`;
+    if (v.station) return `<div class="c-well"><span class="lg none">${radioMark(26)}</span></div>`;
     const ink = src ? src.ink : 'var(--gx-ink-2)';
     const mark = v.kind && v.kind !== 'other' ? sourceMark(v.kind, 24) : svg(P.note, 24);
     return `<div class="c-well" style="color:${ink}"><span style="display:flex;align-items:center;justify-content:center">${mark}</span></div>`;
   }
 
   _volume(v) {
+    /* The compact row has no room for the heart beside the transport: it
+     * ends the volume's row instead. */
+    const heartEnd = v.station ? this._heart(v, 't44 hov c-heart', 22) : '';
     if (!v.volume) {
-      return `<div class="c-fixed" data-gexis-card="volume-fixed">${svg(P.lock, 16)}<span>Fixed output · set on the amplifier</span></div>`;
+      return `<div class="c-fixed" data-gexis-card="volume-fixed">${svg(P.lock, 16)}<span style="flex:1;min-width:0">Fixed output · set on the amplifier</span>${heartEnd}</div>`;
     }
     const level = v.level;
     const knob = level > 6 ? (v.muted ? 0.5 : 0.9) : 0;
@@ -737,11 +1027,16 @@ class GexisPlayerCard extends HTMLElement {
         <div class="fill" style="width:${level}%;opacity:${v.muted ? 0.35 : 1}"></div>
         <div class="knob" style="left:calc(${level}% - 9px);opacity:${knob}"></div>
       </div>
-      <span class="voltext">${v.muted ? 'Muted' : `${level}%`}</span></div>`;
+      <span class="voltext">${v.muted ? 'Muted' : `${level}%`}</span>${heartEnd}</div>`;
   }
 
   _back() {
     return `<button class="pill press" data-act="key" data-key="back" aria-label="Back">${svg(P.back, 20)}<span>Back</span></button>`;
+  }
+
+  /* A station stops rather than pauses (ADR-0180): media_pause stops it. */
+  _pauseLabel(v) {
+    return v.playing ? (v.station ? 'Stop' : 'Pause') : 'Play';
   }
 
   _pad() {
@@ -769,16 +1064,19 @@ class GexisPlayerCard extends HTMLElement {
         <div style="display:flex;flex-direction:column;gap:3px;min-width:0"><div class="t">Can’t reach ${esc(v.name)}</div>
         <div class="n">Home Assistant reconnects when the player is back on the network.</div></div></div>`;
     } else {
-      h += `<div class="rm-page">${v.screen ? this._rmScreen(v) : this._rmNoScreen(v)}</div>`;
+      if (v.radio) h += `<div class="rm-views">${this._views(v, false)}</div>`;
+      h += v.tab === 'radio' ? this._radioFull(v) : `<div class="rm-page">${v.screen ? this._rmScreen(v) : this._rmNoScreen(v)}</div>`;
     }
     if (this._menu && multi) h += this._switcherMenu(v, true);
-    if (this._eqOpen && v.eq && !v.unreachable) h += this._eqSheet(v);
+    if (this._eqOpen && v.eq && !v.unreachable && v.tab === 'now') h += this._eqSheet(v);
     return h + '</div>';
   }
 
   _rmCover(v, big) {
     let inner;
-    if (v.active && v.art) inner = `<img src="${esc(v.art)}" alt="">`;
+    if (v.active && v.art && v.station) inner = this._logoImg(v.art, big ? 380 : 136);
+    else if (v.active && v.art) inner = `<img src="${esc(v.art)}" alt="">`;
+    else if (v.station) inner = `<span class="lg none">${radioMark(big ? 120 : 56, big ? 1.6 : 2)}</span>`;
     else if (v.active) inner = '<span class="rm-pending"><span class="rm-ring"><span class="rm-dot"></span></span><span class="rm-pl">artwork pending</span></span>';
     else inner = svg(P.note, big ? 72 : 44);
     return `<div class="rm-cover${big ? ' big' : ''}" data-gexis-card="cover">${inner}<span class="rm-edge"></span></div>`;
@@ -790,10 +1088,20 @@ class GexisPlayerCard extends HTMLElement {
     const s = big ? [38, 40, 42] : [26, 28, 30];
     const prev = idle || v.prev, next = idle || v.next, play = idle || v.playPause;
     if (!prev && !next && !play) return '';
-    return `<div class="rm-transport${big ? ' big' : ''}${idle ? ' idle' : ''}" data-gexis-card="transport">
-      ${prev ? `<button class="rm-skip" data-act="prev" aria-label="Previous" ${!idle && v.prevOk ? '' : 'disabled'}>${svg(P.prev, s[0])}</button>` : ''}
-      ${play ? `<button class="rm-play" data-act="play" aria-label="${v.playing ? 'Pause' : 'Play'}" ${idle ? 'disabled' : ''}>${v.playing ? svg(P.pause, s[1]) : svg(P.play, s[2])}</button>` : ''}
-      ${next ? `<button class="rm-skip" data-act="next" aria-label="Next" ${!idle && v.nextOk ? '' : 'disabled'}>${svg(P.next, s[0])}</button>` : ''}
+    /* A station (C06; the phone's H17, H20): Stop, Previous and Next through
+     * the favourites, and the heart at the row's right - beside the cover
+     * the row packs to the left; a row of its own (the larger one, or a
+     * narrow card's) keeps the heart's room at its left so the three stay
+     * centred. */
+    const st = v.station;
+    if (st) s[0] = big ? 38 : 21;
+    const playing = v.playing ? (st ? stop(big ? 30 : 20) : svg(P.pause, s[1])) : svg(P.play, s[2]);
+    return `<div class="rm-transport${big ? ' big' : ''}${idle ? ' idle' : ''}${st ? ' radio' : ''}" data-gexis-card="transport">
+      ${st ? '<span class="rm-room" aria-hidden="true"></span>' : ''}
+      ${prev ? `<button class="rm-skip" data-act="prev" aria-label="${st ? 'Previous favourite' : 'Previous'}" ${!idle && v.prevOk ? '' : 'disabled'}>${svg(P.prev, s[0])}</button>` : ''}
+      ${play ? `<button class="rm-play" data-act="play" aria-label="${this._pauseLabel(v)}" ${idle ? 'disabled' : ''}>${playing}</button>` : ''}
+      ${next ? `<button class="rm-skip" data-act="next" aria-label="${st ? 'Next favourite' : 'Next'}" ${!idle && v.nextOk ? '' : 'disabled'}>${svg(P.next, s[0])}</button>` : ''}
+      ${st ? this._heart(v, 'rm-heart', big ? 26 : 22) : ''}
     </div>`;
   }
 
@@ -804,9 +1112,9 @@ class GexisPlayerCard extends HTMLElement {
   }
 
   _rmScreen(v) {
-    let h = `<div class="rm-now" data-gexis-card="what-plays">${this._rmCover(v, false)}
-      <div class="rm-side"><div class="rm-text"><span class="rm-title${v.active ? '' : ' none'}">${esc(v.title)}</span>
-        ${v.active && v.artist ? `<span class="rm-artist">${esc(v.artist)}</span>` : ''}</div>
+    let h = `<div class="rm-now${v.station ? ' radio' : ''}" data-gexis-card="what-plays">${this._rmCover(v, false)}
+      <div class="rm-side${v.station ? ' radio' : ''}"><div class="rm-text"><span class="rm-title${v.active ? '' : ' none'}">${esc(v.title)}</span>
+        ${v.active && v.artist ? `<span class="rm-artist${v.station ? ' station' : ''}">${esc(v.artist)}</span>` : ''}</div>
         ${this._rmTransport(v, false)}</div></div>`;
     h += `<div class="rm-progress${v.active ? '' : ' idle'}" data-gexis-card="position">
       <div class="rm-pbar${v.active && !v.hasPos ? ' live' : ''}">${v.hasPos ? '<div class="rm-pfill" data-pos-fill></div>' : ''}</div>${this._rmTimes(v)}</div>`;
@@ -816,7 +1124,7 @@ class GexisPlayerCard extends HTMLElement {
   }
 
   _rmNoScreen(v) {
-    const by = [v.artist, v.album].filter(Boolean).join(' · ');
+    const by = v.station ? v.artist : [v.artist, v.album].filter(Boolean).join(' · ');
     const can = v.seek && v.hasPos;
     return `<div class="rm-art">${this._rmCover(v, true)}</div>
       <div class="rm-center" data-gexis-card="what-plays"><span class="rm-title${v.active ? '' : ' none'}">${esc(v.title)}</span>
@@ -914,9 +1222,9 @@ class GexisPlayerCard extends HTMLElement {
         <div class="c-meta"><div class="c-title ellip" style="color:${v.active ? 'var(--gx-ink)' : 'var(--gx-ink-2)'}">${esc(v.title)}</div>
         ${v.active && v.artist ? `<div class="sub ellip">${esc(v.artist)}</div>` : ''}</div>
         ${v.prev || v.next || v.playPause ? `<div class="c-transport" data-gexis-card="transport">
-          ${v.prev ? `<button class="t44 hov" data-act="prev" aria-label="Previous" ${v.prevOk ? '' : 'disabled'}>${svg(P.prev, 26)}</button>` : ''}
-          ${v.playPause ? `<button class="c-play press" data-act="play" aria-label="${v.playing ? 'Pause' : 'Play'}">${v.playing ? svg(P.pause, 26) : svg(P.play, 28)}</button>` : ''}
-          ${v.next ? `<button class="t44 hov" data-act="next" aria-label="Next" ${v.nextOk ? '' : 'disabled'}>${svg(P.next, 26)}</button>` : ''}
+          ${v.prev ? `<button class="t44 hov" data-act="prev" aria-label="${v.station ? 'Previous favourite' : 'Previous'}" ${v.prevOk ? '' : 'disabled'}>${svg(P.prev, 26)}</button>` : ''}
+          ${v.playPause ? `<button class="c-play press" data-act="play" aria-label="${this._pauseLabel(v)}">${v.playing ? (v.station ? stop(22) : svg(P.pause, 26)) : svg(P.play, 28)}</button>` : ''}
+          ${v.next ? `<button class="t44 hov" data-act="next" aria-label="${v.station ? 'Next favourite' : 'Next'}" ${v.nextOk ? '' : 'disabled'}>${svg(P.next, 26)}</button>` : ''}
         </div>` : ''}
       </div>`;
     if (v.hasPos) h += `<div class="c-pos" data-gexis-card="position"><div class="bar"><div data-pos-fill style="background:${ink};width:0%"></div></div></div>`;
@@ -1018,9 +1326,13 @@ class GexisPlayerCard extends HTMLElement {
     if (act === 'close') { this._menu = false; this._html = ''; this._render(); return; }
     if (act === 'pick') { this._current = el.dataset.id; this._menu = false; this._html = ''; this._render(); return; }
     if (act === 'dpad') { this._dpadOpen = !this._dpadOpen; this._html = ''; this._render(); return; }
+    if (act === 'tab') { this._tab = el.dataset.key; this._radioSeen = null; this._menu = false; this._eqOpen = false; this._render(); return; }
     if (!v) return;
     const id = { entity_id: v.id };
-    if (act === 'play') this._call('media_player', v.playing ? 'media_pause' : 'media_play', id);
+    if (act === 'station') this._call('media_player', 'play_media', { ...id, media_content_id: el.dataset.cid, media_content_type: 'channel' });
+    else if (act === 'heart') {
+      if (v.station) this._call('gexis', 'radio_favourite', { ...id, favourite: !v.station.favourite });
+    } else if (act === 'play') this._call('media_player', v.playing ? 'media_pause' : 'media_play', id);
     else if (act === 'prev') this._call('media_player', 'media_previous_track', id);
     else if (act === 'next') this._call('media_player', 'media_next_track', id);
     else if (act === 'mute') this._call('media_player', 'volume_mute', { ...id, is_volume_muted: !v.muted });

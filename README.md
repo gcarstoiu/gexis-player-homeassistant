@@ -37,7 +37,7 @@ example `livingroom.local`) and port 8090.
 
 | Entity | What it does |
 |---|---|
-| Media player | Playing, paused or idle; title, artist, album, artwork, position. Play, pause, next and previous when the source playing has them; shuffle and repeat where it has them; seeking where it has it; volume and mute, and with Fixed volume mute alone where the output has a volume control of its own; the source playing (each source is taken over from its own app, as on the player). As on the player, a control the source has stays while it cannot be used (Next on the last track); `available_controls` lists those that work now. |
+| Media player | Playing, paused or idle; title, artist, album, artwork, position. Play, pause, next and previous when the source playing has them; shuffle and repeat where it has them; seeking where it has it; volume and mute, and with Fixed volume mute alone where the output has a volume control of its own; the source playing (each source is taken over from its own app, as on the player; internet radio's favourites are chosen here, below). As on the player, a control the source has stays while it cannot be used (Next on the last track); `available_controls` lists those that work now. |
 | Screen | On is lit; off is display standby. |
 | Dashboard | Puts the player's Home Assistant dashboard up or takes it down. Unavailable until a dashboard address is set on the player (*Settings → Display → Home Assistant dashboard*). |
 | Visualiser | Shows or hides the visualiser. Unavailable when the output cannot feed the meters. |
@@ -51,6 +51,36 @@ example `livingroom.local`) and port 8090.
 
 The switches (the equaliser's apart), buttons, D-pad and Page are unavailable
 on a player without a screen.
+
+## Internet radio
+
+On a Gexis Player with internet radio, switched on:
+
+- **Its favourites are the media player's sources**, in the player's order:
+  choosing one plays it, and a favourite playing is the source shown.
+- **Its station directory is in Home Assistant's media browser**:
+  *Favourites*, *Popular here*, *By genre*, *By country* and *By language*,
+  and the browser's search finds stations by name. A station played from
+  there can be played the same way from an automation.
+- **The card has a Radio view**: *Now playing · Radio* under the player
+  switches to the favourites, and a tap plays one. Every other station is in
+  the media browser.
+- **`gexis.radio_favourite`** makes the station playing one of the
+  favourites, or takes it out - the heart beside the card's transport:
+
+```yaml
+action: gexis.radio_favourite
+target:
+  entity_id: media_player.living_room
+data:
+  favourite: true      # false takes it out
+```
+
+While a station plays, Next and Previous step through the favourites (for a
+station that is not one they are greyed), and Pause stops it. The media
+player's `radio` attribute says which station plays, whether it is a
+favourite, and its state: `playing`, `connecting`, `reconnecting`, `stopped`
+or `not_answering`.
 
 ## A page on the player's screen
 

@@ -9,7 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 
-from custom_components.gexis.const import CARD_FILE, DOMAIN, FRONTEND_URL
+from custom_components.gexis import ws_radio
+from custom_components.gexis.const import ATTR_FAVOURITE, CARD_FILE, DOMAIN, FRONTEND_URL, SERVICE_RADIO_FAVOURITE
 
 FRONTEND = Path(__file__).parents[1] / "custom_components" / "gexis" / "frontend"
 
@@ -50,3 +51,19 @@ def test_the_card_waits_for_home_assistants_registry() -> None:
     card = (FRONTEND / CARD_FILE).read_text()
     assert "window.CustomElementRegistryPolyfill" in card
     assert "class extends GexisPlayerCard {}" in card
+
+
+def test_the_cards_radio_view_asks_what_the_integration_answers() -> None:
+    """ADR-0180 item 10, design/source/31 C01-C06: the view switch and the
+    Radio view's regions, the WebSocket command and the services the card
+    calls are the integration's own."""
+    card = (FRONTEND / CARD_FILE).read_text()
+    for region in ("views", "favourites", "favourite", "favourites-empty"):
+        assert f'data-gexis-card="{region}"' in card, region
+    assert f"type: '{ws_radio._ws_command}'" in card
+    assert f"'{DOMAIN}', '{SERVICE_RADIO_FAVOURITE}', {{ ...id, {ATTR_FAVOURITE}: " in card
+    assert "'play_media', { ...id, media_content_id: el.dataset.cid, media_content_type: 'channel' }" in card
+    for words in ("Now playing", "Favourites · ", "No favourites yet",
+                  "Add them with the heart on the player’s screen or its phone remote.",
+                  "Every other station is in Home Assistant’s media browser."):
+        assert words in card, words
