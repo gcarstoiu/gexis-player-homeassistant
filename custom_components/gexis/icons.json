@@ -50,6 +50,12 @@
     },
     "radio_favourite": {
       "service": "mdi:heart"
+    },
+    "set_group_volume": {
+      "service": "mdi:speaker-multiple"
+    },
+    "mute_group": {
+      "service": "mdi:volume-off"
     }
   }
 }

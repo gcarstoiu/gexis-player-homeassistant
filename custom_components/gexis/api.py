@@ -191,6 +191,14 @@ class GexisPlayer:
         """The group ended; the music stays on the player that leads."""
         await self._post("/group/undo", missing=UPDATE_FOR_GROUPS)
 
+    async def group_volume(self, percent: int) -> None:
+        """The group's *All* slider (the player's ADR-0166 D6): every Variable
+        member moved the same share of its own way, so the balance stays."""
+        await self._post("/group/volume", {"percent": percent}, missing=UPDATE_FOR_GROUPS)
+
+    async def group_mute(self, muted: bool) -> None:
+        await self._post("/group/mute", {"muted": muted}, missing=UPDATE_FOR_GROUPS)
+
     async def set_volume(self, percent: int) -> None:
         await self._post("/volume", {"percent": percent})
 

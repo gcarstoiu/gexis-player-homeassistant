@@ -83,3 +83,39 @@ async def test_unjoin_leaves_and_the_leader_undoes(hass: HomeAssistant, aioclien
     await hass.async_block_till_done()
     await hass.services.async_call("media_player", "unjoin", {ATTR_ENTITY_ID: ENTITY}, blocking=True)
     assert [str(c[1]).rsplit("/", 1)[-1] for c in aioclient_mock.mock_calls if "/group/" in str(c[1])] == ["leave", "undo"]
+
+
+async def test_the_group_attribute_is_the_phones_group(hass: HomeAssistant, aioclient_mock, entry, state, no_socket) -> None:
+    """The card draws the phone's group from it: who leads, each member's
+    state and level; a member Home Assistant does not know has no entity."""
+    other = kitchen(hass)
+    view = group(KITCHEN_ID, STATUS["id"])
+    view.update({"level": 40, "muted": False, "transport": "playing", "title": "A track",
+                 "source": {"id": "lms", "name": "Lyrion", "accent": "#7ed6bc"}})
+    view["members"][0].update({"reachable": True, "volume": 50, "muted": False, "fixed": False, "fixed_mute": None})
+    view["members"][1].update({"reachable": True, "volume": 30, "muted": True, "fixed": False, "fixed_mute": None})
+    view["members"][2].update({"reachable": False, "joining": False, "volume": None, "fixed": True, "fixed_mute": None})
+    state["group"] = view
+    await setup(hass, aioclient_mock, entry, state, {**STATUS, "multiroom": 1})
+    g = hass.states.get(ENTITY).attributes["group"]
+    assert g["leader"] == other
+    assert (g["level"], g["muted"], g["silent"], g["source"], g["transport"]) == (40, False, False, "Lyrion", "playing")
+    assert [m["entity_id"] for m in g["members"]] == [other, ENTITY, None]
+    assert [(m["leads"], m["me"], m["reachable"], m["volume"], m["muted"], m["fixed"]) for m in g["members"]] == [
+        (True, False, True, 50, False, False), (False, True, True, 30, True, False), (False, False, False, None, False, True)]
+
+
+async def test_no_group_no_attribute(hass: HomeAssistant, aioclient_mock, entry, state, no_socket) -> None:
+    await setup(hass, aioclient_mock, entry, state, {**STATUS, "multiroom": 1})
+    assert "group" not in hass.states.get(ENTITY).attributes
+
+
+async def test_the_groups_volume_and_mute(hass: HomeAssistant, aioclient_mock, entry, state, no_socket) -> None:
+    state["group"] = group(STATUS["id"], STATUS["id"])
+    await setup(hass, aioclient_mock, entry, state, {**STATUS, "multiroom": 1})
+    aioclient_mock.post(f"{BASE}/group/volume", json={"levels": {}})
+    aioclient_mock.post(f"{BASE}/group/mute", json={"ok": True})
+    await hass.services.async_call(DOMAIN, "set_group_volume", {ATTR_ENTITY_ID: ENTITY, "volume_level": 0.42}, blocking=True)
+    await hass.services.async_call(DOMAIN, "mute_group", {ATTR_ENTITY_ID: ENTITY, "is_volume_muted": True}, blocking=True)
+    sent = [(str(c[1]).rsplit("/", 1)[-1], c[2]) for c in aioclient_mock.mock_calls if "/group/" in str(c[1])]
+    assert sent == [("volume", {"percent": 42}), ("mute", {"muted": True})]

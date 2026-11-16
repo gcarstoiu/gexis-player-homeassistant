@@ -92,6 +92,8 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
     _attr_device_class = MediaPlayerDeviceClass.SPEAKER
     _attr_media_content_type = MediaType.MUSIC
     _attr_media_image_remotely_accessible = False
+    #: The group's volumes move with every member's: kept out of the history.
+    _unrecorded_attributes = frozenset({"group"})
 
     def __init__(self, player: GexisPlayer) -> None:
         super().__init__(player, None)
@@ -206,7 +208,42 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
             station = radio.get("station") or {}
             attributes["radio"] = {"station": station.get("id"), "favourite": station.get("favourite") is True,
                                    "state": radio.get("state")}
+        group = self.state_dict.get("group")
+        if isinstance(group, dict) and group.get("members"):
+            attributes["group"] = self._group_view(group)
         return attributes
+
+    def _group_view(self, group: dict[str, Any]) -> dict[str, Any]:
+        """**The group as the phone shows it** (the player's ADR-0166), for the
+        card: who leads, each member's state and level, the *All* slider's
+        level. A member Home Assistant does not know has no `entity_id`."""
+        source = group.get("source")
+        leader = group.get("leader")
+        return {
+            "leader": self._entity_of(leader) if leader else None,
+            "silent": group.get("silent") is True,
+            "level": group.get("level"),
+            "muted": group.get("muted") is True,
+            "source": source.get("name") if isinstance(source, dict) else None,
+            "transport": group.get("transport"),
+            "title": group.get("title"),
+            "members": [
+                {
+                    "entity_id": self._entity_of(m["id"]) if m.get("id") else None,
+                    "name": m.get("name") or "",
+                    "leads": m.get("leads") is True,
+                    "me": m.get("me") is True,
+                    "reachable": m.get("reachable") is not False,
+                    "joining": m.get("joining") is True,
+                    "volume": m.get("volume"),
+                    "muted": m.get("muted") is True,
+                    "fixed": m.get("fixed") is True,
+                    "fixed_mute": m.get("fixed_mute"),
+                }
+                for m in group.get("members") or []
+                if isinstance(m, dict)
+            ],
+        }
 
     @property
     def state(self) -> MediaPlayerState:
@@ -474,3 +511,11 @@ class GexisMediaPlayer(GexisEntity, MediaPlayerEntity):
             await self._run(self.player.undo())
         else:
             await self._run(self.player.leave())
+
+    async def async_set_group_volume(self, volume_level: float) -> None:
+        """The group's *All* slider: every Variable member the same share of
+        its own way, so a louder room stays louder."""
+        await self._run(self.player.group_volume(round(volume_level * 100)))
+
+    async def async_mute_group(self, is_volume_muted: bool) -> None:
+        await self._run(self.player.group_mute(is_volume_muted))

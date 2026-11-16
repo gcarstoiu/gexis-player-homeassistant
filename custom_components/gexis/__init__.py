@@ -7,7 +7,12 @@ from pathlib import Path
 import voluptuous as vol
 
 from homeassistant.components import websocket_api
-from homeassistant.components.media_player import DATA_COMPONENT, DOMAIN as MEDIA_PLAYER_DOMAIN
+from homeassistant.components.media_player import (
+    ATTR_MEDIA_VOLUME_LEVEL,
+    ATTR_MEDIA_VOLUME_MUTED,
+    DATA_COMPONENT,
+    DOMAIN as MEDIA_PLAYER_DOMAIN,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant, callback
@@ -29,8 +34,10 @@ from .const import (
     PAGE_MAX_S,
     PAGE_MIN_S,
     SERVICE_HIDE_PAGE,
+    SERVICE_MUTE_GROUP,
     SERVICE_PRELOAD_PAGE,
     SERVICE_RADIO_FAVOURITE,
+    SERVICE_SET_GROUP_VOLUME,
     SERVICE_SHOW_PAGE,
 )
 
@@ -55,6 +62,8 @@ HIDE_PAGE_SCHEMA = {vol.Optional(ATTR_PAGE_ID): vol.All(cv.string, vol.Length(mi
 PRELOAD_PAGE_SCHEMA = {vol.Optional(ATTR_URL): vol.Any(None, "", vol.All(cv.string, vol.Match(r"^https?://\S+$")))}
 #: ADR-0180: the heart on the station playing now.
 RADIO_FAVOURITE_SCHEMA = {vol.Required(ATTR_FAVOURITE): cv.boolean}
+SET_GROUP_VOLUME_SCHEMA = {vol.Required(ATTR_MEDIA_VOLUME_LEVEL): cv.small_float}
+MUTE_GROUP_SCHEMA = {vol.Required(ATTR_MEDIA_VOLUME_MUTED): cv.boolean}
 
 type GexisConfigEntry = ConfigEntry[GexisPlayer]
 
@@ -79,6 +88,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     service.async_register_platform_entity_service(
         hass, DOMAIN, SERVICE_RADIO_FAVOURITE, entity_domain=MEDIA_PLAYER_DOMAIN,
         schema=RADIO_FAVOURITE_SCHEMA, func="async_radio_favourite",
+    )
+    service.async_register_platform_entity_service(
+        hass, DOMAIN, SERVICE_SET_GROUP_VOLUME, entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema=SET_GROUP_VOLUME_SCHEMA, func="async_set_group_volume",
+    )
+    service.async_register_platform_entity_service(
+        hass, DOMAIN, SERVICE_MUTE_GROUP, entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema=MUTE_GROUP_SCHEMA, func="async_mute_group",
     )
     websocket_api.async_register_command(hass, ws_radio)
     if hass.http is None:  # no web server, as in tests

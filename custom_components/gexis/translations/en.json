@@ -136,6 +136,26 @@
           "description": "On to keep the station as a favourite, off to take it out."
         }
       }
+    },
+    "set_group_volume": {
+      "name": "Set the group's volume",
+      "description": "The group's volume, as the phone's group slider sets it: every player in the group with a volume of its own moves the same share of its way up or down, so a louder room stays louder. Needs Gexis Player 1.8.0 or later, in a group.",
+      "fields": {
+        "volume_level": {
+          "name": "Level",
+          "description": "The group's level, from 0 to 1: the mean of its players' levels."
+        }
+      }
+    },
+    "mute_group": {
+      "name": "Mute the group",
+      "description": "Mutes every player in the group, or unmutes them. Needs Gexis Player 1.8.0 or later, in a group.",
+      "fields": {
+        "is_volume_muted": {
+          "name": "Muted",
+          "description": "On to mute every player in the group, off to unmute them."
+        }
+      }
     }
   }
 }

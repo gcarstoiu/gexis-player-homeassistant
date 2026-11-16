@@ -10,7 +10,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 
 from custom_components.gexis import ws_radio
-from custom_components.gexis.const import ATTR_FAVOURITE, CARD_FILE, DOMAIN, FRONTEND_URL, SERVICE_RADIO_FAVOURITE
+from custom_components.gexis.const import (
+    ATTR_FAVOURITE,
+    CARD_FILE,
+    DOMAIN,
+    FRONTEND_URL,
+    SERVICE_MUTE_GROUP,
+    SERVICE_RADIO_FAVOURITE,
+    SERVICE_SET_GROUP_VOLUME,
+)
 
 FRONTEND = Path(__file__).parents[1] / "custom_components" / "gexis" / "frontend"
 
@@ -66,4 +74,20 @@ def test_the_cards_radio_view_asks_what_the_integration_answers() -> None:
     for words in ("Now playing", "Favourites · ", "No favourites yet",
                   "Add them with the heart on the player’s screen or its phone remote.",
                   "Every other station is in Home Assistant’s media browser."):
+        assert words in card, words
+
+
+def test_the_cards_group_calls_what_the_integration_offers() -> None:
+    """The player's ADR-0166, design/source/22 as the phone has it: the
+    group's regions, Home Assistant's own join and unjoin, and the
+    integration's group volume and mute."""
+    card = (FRONTEND / CARD_FILE).read_text()
+    for region in ("group", "other-group", "group-mark", "group-volume", "undo-group"):
+        assert f'data-gexis-card="{region}"' in card, region
+    assert f"this._call('{DOMAIN}', '{SERVICE_SET_GROUP_VOLUME}', {{ entity_id: id, volume_level: " in card
+    assert f"this._call('{DOMAIN}', '{SERVICE_MUTE_GROUP}', {{ ...id, is_volume_muted: " in card
+    assert "this._call('media_player', 'join', { ...id, group_members: [other] })" in card
+    assert "this._call('media_player', 'unjoin', { entity_id: leader })" in card
+    for words in ("Grouped · ", "Join this group", "Leave group", "Undo group", "Undo the group?",
+                  "each play on their own again.", "Group volume", "each keeps its own level"):
         assert words in card, words

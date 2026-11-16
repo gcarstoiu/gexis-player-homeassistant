@@ -39,7 +39,7 @@ example `livingroom.local`) and port 8090.
 
 | Entity | What it does |
 |---|---|
-| Media player | Playing, paused or idle; title, artist, album, artwork, position. Play, pause, next and previous when the source playing has them; shuffle and repeat where it has them; seeking where it has it; volume and mute, and with Fixed volume mute alone where the output has a volume control of its own; the source playing (each source is taken over from its own app, as on the player; internet radio's favourites are chosen here, below). As on the player, a control the source has stays while it cannot be used (Next on the last track); `available_controls` lists those that work now. Grouping, with a player that has groups: Home Assistant's own join and unjoin (*Join* on the media player's card, or the `media_player.join` and `media_player.unjoin` actions) join other players to this one's group or take this one out - the player that leads, unjoined, ends its group, and the music stays on it - and `group_members` lists the group, the player that leads first. |
+| Media player | Playing, paused or idle; title, artist, album, artwork, position. Play, pause, next and previous when the source playing has them; shuffle and repeat where it has them; seeking where it has it; volume and mute, and with Fixed volume mute alone where the output has a volume control of its own; the source playing (each source is taken over from its own app, as on the player; internet radio's favourites are chosen here, below). As on the player, a control the source has stays while it cannot be used (Next on the last track); `available_controls` lists those that work now. Grouping, with a player that has groups: Home Assistant's own join and unjoin (*Join* on the media player's card, or the `media_player.join` and `media_player.unjoin` actions) join other players to this one's group or take this one out - the player that leads, unjoined, ends its group, and the music stays on it - and `group_members` lists the group, the player that leads first; the `group` attribute holds what the card draws of it. The group's own volume and mute: *Set the group's volume* (`gexis.set_group_volume`, `volume_level` 0-1) moves every player in it that has a volume of its own the same share of its way, so a louder room stays louder; *Mute the group* (`gexis.mute_group`, `is_volume_muted`). |
 | Screen | On is lit; off is display standby. |
 | Dashboard | Puts the player's Home Assistant dashboard up or takes it down. Unavailable until a dashboard address is set on the player (*Settings → Display → Home Assistant dashboard*). |
 | Visualiser | Shows or hides the visualiser. Unavailable when the output cannot feed the meters. |
@@ -162,7 +162,16 @@ with a screen, the D-pad with Home, Lyrics, Back and Meters at its corners,
 then Standby, the idle screen, Playing and Room, each left out where the
 phone leaves it out; and the volume, with mute and the equaliser's setting,
 beside a button that opens the equaliser. A player without a screen gets a
-large cover and a bar to move through the track. In YAML:
+large cover and a bar to move through the track.
+
+Grouped, it follows the phone too (Gexis Player 1.8.0 or later): *with
+Kitchen* under what plays opens the switcher, where the group is a block of
+its own - its players, the one that leads marked, *Remove*, *Leave group* and
+*Undo group*, which asks first - another group is a block joined whole with
+*Join this group*, and each player on its own has *Join*. The volume is the
+group's, *GROUP* and the count in it, and the button beside it opens the
+group's volume: *All*, and each player's own level and mute. The compact form
+has the switcher's group and keeps each player's own volume. In YAML:
 
 ```yaml
 type: custom:gexis-player-card

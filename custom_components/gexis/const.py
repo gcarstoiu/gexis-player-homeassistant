@@ -23,3 +23,9 @@ PAGE_MAX_S = 3600
 #: or no longer one.
 SERVICE_RADIO_FAVOURITE = "radio_favourite"
 ATTR_FAVOURITE = "favourite"
+
+#: The group's volume (the player's ADR-0166 D6): its *All* slider and its
+#: mute, as the phone has them; Home Assistant's own volume and mute stay
+#: each player's.
+SERVICE_SET_GROUP_VOLUME = "set_group_volume"
+SERVICE_MUTE_GROUP = "mute_group"

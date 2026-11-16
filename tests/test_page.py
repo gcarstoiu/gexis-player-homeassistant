@@ -124,7 +124,8 @@ def test_every_action_and_field_is_described() -> None:
     services = yaml.safe_load((root / "services.yaml").read_text())
     text = json.loads((root / "translations" / "en.json").read_text())["services"]
     icons = json.loads((root / "icons.json").read_text())["services"]
-    assert set(services) == set(text) == set(icons) == {"show_page", "hide_page", "preload_page", "radio_favourite"}
+    assert set(services) == set(text) == set(icons) == {"show_page", "hide_page", "preload_page", "radio_favourite",
+                                                                 "set_group_volume", "mute_group"}
     for name, spec in services.items():
         assert set(spec["fields"]) == set(text[name]["fields"]), name
 

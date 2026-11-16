@@ -15,7 +15,7 @@ const FONTS = new URL('fonts/', import.meta.url).href;
 /* media_player supported_features */
 const F = {
   PAUSE: 1, SEEK: 2, VOLUME_SET: 4, VOLUME_MUTE: 8, PREVIOUS_TRACK: 16, NEXT_TRACK: 32,
-  PLAY: 16384,
+  PLAY: 16384, GROUPING: 524288,
 };
 
 const SOURCES = {
@@ -190,6 +190,95 @@ function stateLine(st) {
   return 'Idle';
 }
 
+/* ---- The group (the player's ADR-0166; design/source/22, picks 1a, 2a, 3a) --
+ * The phone's, drawn from each player's `group` attribute (ADR-0163,
+ * *Following the phone's group*): its words, as lib/group.svelte.js says
+ * them, and the order inside a group. */
+
+const GROUP_GLYPH = (size) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true" style="display:block;flex-shrink:0"><rect x="2.5" y="4" width="8" height="16" rx="2"></rect><rect x="13.5" y="4" width="8" height="16" rx="2"></rect><circle cx="6.5" cy="14.5" r="2"></circle><circle cx="17.5" cy="14.5" r="2"></circle></svg>`;
+const NAMES = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
+const alphabetical = (list) => [...(list || [])].sort((a, b) => NAMES.compare(a?.name ?? '', b?.name ?? ''));
+
+/* A player's group, or null when it plays alone. */
+function groupOf(st) {
+  const g = st && st.state !== 'unavailable' && st.state !== 'unknown' ? st.attributes?.group : null;
+  return g && Array.isArray(g.members) && g.members.length ? g : null;
+}
+
+function joinNames(names) {
+  return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+function plays(transport, source) {
+  if (transport === 'playing') return source ? `Playing · ${source}` : 'Playing';
+  if (transport === 'paused') return source ? `Paused · ${source}` : 'Paused';
+  return 'Idle';
+}
+
+/* The mark: `with Kitchen, Study`, and past two names ` + 3`. */
+function withText(g) {
+  const others = alphabetical(g.members).filter((m) => !m.me).map((m) => m.name);
+  if (others.length <= 2) return [`with ${others.join(', ')}`, ''];
+  return [`with ${others.slice(0, 2).join(', ')}`, ` + ${others.length - 2}`];
+}
+
+function memberStatus(g, m) {
+  if (!m.reachable) return m.leads ? 'Off · was leading the group' : 'Not reachable';
+  if (m.joining) return 'Joining · catching up';
+  if (m.leads) return plays(g.transport, g.source);
+  return g.silent ? 'In this group · silent' : 'In this group';
+}
+
+const groupHead = (g) => (g.silent ? 'Grouped · silent' : `Grouped · ${g.members.length} players`);
+
+function groupSub(g) {
+  if (g.silent) {
+    const leader = g.members.find((m) => m.leads);
+    return leader ? `${leader.name} is off` : 'The leader is off';
+  }
+  const what = plays(g.transport, g.source);
+  return g.title && g.transport !== 'stopped' ? `${what} · ${g.title}` : what;
+}
+
+function silentNote(g) {
+  const live = g.members.filter((m) => m.reachable && !m.leads).map((m) => m.name);
+  const who = live.length < 2 ? live.join('') : `${live.slice(0, -1).join(', ')} or ${live[live.length - 1]}`;
+  return `The group stays. Start music on ${who} and it leads.`;
+}
+
+function undoBody(g) {
+  const names = alphabetical(g.members).map((m) => m.name);
+  const leader = g.members.find((m) => m.leads)?.name ?? names[0];
+  const again = `${joinNames(names)} each play on their own again.`;
+  return g.silent ? again : `${again} The music stays on ${leader}.`;
+}
+
+const levelsSub = (g) => `${g.members.length} players · each keeps its own level`;
+
+function fixedNote(g) {
+  const fixed = g.members.filter((m) => m.fixed).map((m) => m.name);
+  const base = 'The group slider moves each player the same share of its way up or down, so a louder room stays louder.';
+  if (!fixed.length) return base;
+  return `${base} ${joinNames(fixed)} ${fixed.length > 1 ? 'are' : 'is'} on Fixed volume: the amplifier sets the level.`;
+}
+
+/* The members the *All* slider moves: reachable, with a volume of their own. */
+const variableMembers = (g) => g.members.filter((m) => m.reachable && !m.fixed && m.volume != null);
+
+/* Where the *All* slider puts them, drawn before the player answers (its
+ * `group.step_levels`): each the same share of its own way, to 100 going up
+ * and to 0 going down, so their mean is where the finger is. */
+function stepped(from, target) {
+  if (!from.length) return [];
+  const mean = from.reduce((a, l) => a + l, 0) / from.length;
+  const t = Math.max(0, Math.min(100, target));
+  return from.map((l) => {
+    const x = t >= mean ? l + (mean >= 100 ? 0 : (t - mean) / (100 - mean)) * (100 - l)
+      : l - (mean <= 0 ? 0 : (mean - t) / mean) * l;
+    return Math.max(0, Math.min(100, Math.round(x)));
+  });
+}
+
 /* ---- The card ------------------------------------------------------------- */
 
 const STYLE = `
@@ -298,6 +387,16 @@ const STYLE = `
   --gx-plate-line: var(--gexis-card-logo-plate-line,rgba(127,127,127,0.2));
   --gx-kicker-track: var(--gexis-card-kicker-track,var(--gx-label-track));
   --gx-view: color-mix(in srgb,var(--gx-accent) 18%,transparent);
+  /* The group (design/source/22): on the accent whatever plays; Undo on the
+   * warning's amber. */
+  --gx-grp-ground: color-mix(in srgb,var(--gx-accent) 6%,transparent);
+  --gx-grp-line: color-mix(in srgb,var(--gx-accent) 22%,transparent);
+  --gx-grp-on: color-mix(in srgb,var(--gx-accent) 12%,transparent);
+  --gx-grp-on-line: color-mix(in srgb,var(--gx-accent) 45%,transparent);
+  --gx-grp-join: color-mix(in srgb,var(--gx-accent) 14%,transparent);
+  --gx-grp-join-line: color-mix(in srgb,var(--gx-accent) 45%,transparent);
+  --gx-undo-ground: color-mix(in srgb,var(--gx-warn) 14%,transparent);
+  --gx-undo-line: color-mix(in srgb,var(--gx-warn) 40%,transparent);
   --gx-on-air: color-mix(in srgb,var(--gx-accent) 12%,transparent);
   container-type: inline-size;
   position: relative; box-sizing: border-box; width: 100%;
@@ -400,8 +499,12 @@ button[disabled] { cursor: default; }
 .menu { position: absolute; z-index: 5; left: 8px; right: 8px; top: 60px; max-width: 420px; background: var(--gx-menu);
   border: 1px solid var(--gx-line); border-radius: 12px; box-shadow: var(--gx-menu-shadow); padding: 6px 0; }
 .menu .label { padding: 8px 16px 6px; font-size: 12px; }
-.menu button { justify-content: flex-start; width: 100%; gap: 12px; min-height: 56px; padding: 0 16px; }
-.menu button.current { background: var(--gx-fill); }
+/* The card clips what leaves it: a list longer than the compact card scrolls
+ * inside it (a group's block makes it longer). */
+.menu:not(.rm-menu) { max-height: calc(100% - 68px); box-sizing: border-box; overflow-y: auto; }
+.menu .pick { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: flex-start; text-align: left; gap: 12px; min-height: 56px; padding: 0 16px; box-sizing: border-box; }
+.menu .mrow { display: flex; align-items: center; }
+.menu .mrow.current { background: var(--gx-fill); }
 .menu .mark { width: 28px; height: 28px; }
 .menu .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .menu .who .n { display: block; font-size: 15px; font-weight: 500; }
@@ -554,10 +657,79 @@ button[disabled] { cursor: default; }
 .rm-menu-veil { position: absolute; inset: 0; z-index: 4; background: var(--gx-scrim); }
 .rm-menu { position: absolute; z-index: 5; left: 16px; right: 16px; top: 72px; background: var(--gx-sheet); border-radius: 18px; box-shadow: 0 18px 48px rgba(0,0,0,0.55), inset 0 0 0 1px var(--gx-button-line); padding: 8px 0; }
 .rm-menu .label { padding: 8px 18px 6px; font-family: var(--gx-label-font); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; }
-.rm-menu button { justify-content: flex-start; width: 100%; gap: 12px; min-height: 64px; padding: 0 18px; }
-.rm-menu button.current { background: var(--gx-button); }
+.rm-menu { max-height: calc(100% - 88px); overflow-y: auto; scrollbar-width: none; }
+.rm-menu::-webkit-scrollbar { display: none; }
+.rm-menu .pick { min-height: 64px; padding: 0 18px; }
+.rm-menu .mrow.current { background: var(--gx-button); }
 .rm-menu .mark { width: 30px; height: 30px; }
 .rm-menu .who .n { font-size: 16px; font-weight: 700; }
+
+/* ---- The group (the player's ADR-0166; design/source/22, the phone's) ---- */
+.menu .mrow.member .pick { padding: 0 10px 0 12px; }
+.menu .mrow.off .mark, .menu .mrow.off .who { opacity: 0.45; }
+.menu .who .s.joining { color: var(--gx-accent); }
+.menu .who .s.quiet { color: var(--gx-ink-3); }
+.menu .act { flex-shrink: 0; height: 44px; padding: 0 14px; margin-right: 12px; border-radius: 12px; font-size: 14px; font-weight: 700;
+  background: var(--gx-button); box-shadow: inset 0 0 0 1px var(--gx-button-line); color: var(--gx-ink); }
+.menu .mrow.member .act { margin-right: 10px; }
+.menu .act.join, .grp .wide.join { background: var(--gx-grp-join); box-shadow: inset 0 0 0 1px var(--gx-grp-join-line); color: var(--gx-accent); }
+.menu .act:active, .grp .wide:active, .cf button:active { transform: scale(0.96); }
+.leads { display: inline-block; vertical-align: 2px; margin-left: 8px; font-family: var(--gx-label-font); font-size: 10px; font-weight: 400; line-height: 1;
+  letter-spacing: 0.14em; text-transform: uppercase; padding: 4px 6px; border-radius: 6px; background: var(--gx-grp-join); color: var(--gx-accent); }
+.grp { margin: 4px 8px 8px; border-radius: 14px; background: var(--gx-grp-ground); box-shadow: inset 0 0 0 1px var(--gx-grp-line); padding: 12px 0 10px; overflow: hidden; }
+.grp.other { background: var(--gx-touch); box-shadow: inset 0 0 0 1px var(--gx-touch-line); }
+.grp.other .leads { background: var(--gx-vol-track); color: var(--gx-ink-2); }
+.grp.other .mrow.member .pick { min-height: 48px; }
+.grp-head { display: flex; align-items: center; gap: 10px; padding: 0 12px 6px; color: var(--gx-accent); }
+.grp.other .grp-head { color: var(--gx-ink-2); }
+.grp-head .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.grp-title { font-size: 14px; font-weight: 700; color: var(--gx-accent); }
+.grp.other .grp-title { color: var(--gx-ink); }
+.grp-head .s { font-size: 13px; color: var(--gx-ink-2); }
+.grp-note { padding: 6px 12px 2px; font-size: 13px; line-height: 1.4; color: var(--gx-warn); }
+.grp-buttons { display: flex; gap: 8px; padding: 8px 10px 0; }
+.grp .wide { flex: 1; min-width: 0; height: 44px; border-radius: 12px; font-size: 15px; font-weight: 700; white-space: nowrap;
+  background: var(--gx-button); box-shadow: inset 0 0 0 1px var(--gx-button-line); color: var(--gx-ink); }
+.grp .wide.undo { color: var(--gx-warn); }
+.grp .wide.join[disabled] { opacity: 0.8; }
+.rm-gmark { display: flex; justify-content: center; height: 18px; margin: 12px 0 -2px; }
+.rm-gmark button { max-width: 100%; min-width: 0; gap: 6px; height: 30px; margin: -6px 0; padding: 0 8px; border-radius: 8px; color: var(--gx-ink); font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; }
+.rm-gmark svg { color: var(--gx-accent); }
+.rm-gmark .with { min-width: 0; overflow: hidden; text-overflow: ellipsis; opacity: 0.86; }
+.rm-gmark .more { flex-shrink: 0; opacity: 0.86; }
+.rm-played + .rm-gmark { margin-top: 8px; height: 20px; }
+.rm-vol.still { cursor: default; }
+.rm-eq.gcap { color: var(--gx-accent); }
+/* A dashboard column (300): beside the group's and EQ's buttons the bar has
+ * no room for GROUP and the count; the level stays. */
+@container (max-width: 345px) { .rm-eq.gcap, .rm-eq.gcap + .rm-eq.dark { display: none; } }
+.gs .rm-hstate { white-space: normal; }
+.rm-gbtn { width: 56px; height: 56px; border-radius: 18px; flex-shrink: 0; background: var(--gx-grp-on); box-shadow: inset 0 0 0 1px var(--gx-grp-on-line); color: var(--gx-accent); }
+.rm-sheet.gs { max-height: calc(100% - 40px); box-sizing: border-box; gap: 12px; }
+.gs-all { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.gs-alln { width: 104px; flex-shrink: 0; font-size: 15px; font-weight: 700; color: var(--gx-accent); }
+.gs-bar { flex: 1; }
+.gs-allbar { height: 44px; box-shadow: inset 0 0 0 1px var(--gx-grp-on-line); }
+.gs-rule { flex-shrink: 0; height: 1px; background: var(--gx-line); }
+.gs-rows { min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; gap: 8px; }
+.gs-rows::-webkit-scrollbar { display: none; }
+.gs-member { flex-shrink: 0; display: flex; align-items: center; gap: 12px; min-height: 40px; }
+.gs-member .rm-fixed { flex: 1; }
+.gs-who { width: 104px; flex-shrink: 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gs-name { font-size: 15px; font-weight: 700; }
+.gs-tag { font-family: var(--gx-label-font); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap; color: var(--gx-ink-3); }
+.gs-tag.lead { color: var(--gx-accent); }
+.gs-off { flex: 1; min-width: 0; height: 36px; border-radius: 12px; border: 1px dashed var(--gx-dash); box-sizing: border-box; display: flex; align-items: center; padding: 0 14px; font-size: 14px; color: var(--gx-ink-3); }
+.gs-note { flex-shrink: 0; font-size: 14px; line-height: 1.4; color: var(--gx-ink-3); }
+.cf-scrim { position: absolute; inset: 0; z-index: 8; background: var(--gx-scrim); }
+.cf { position: absolute; z-index: 9; left: 16px; right: 16px; top: 50%; transform: translateY(-50%); max-width: 420px; margin: 0 auto; background: var(--gx-sheet); border-radius: 20px;
+  box-shadow: 0 18px 48px rgba(0,0,0,0.55), inset 0 0 0 1px var(--gx-button-line); padding: 22px 18px 16px; display: flex; flex-direction: column; gap: 10px; }
+.cf-title { font-size: 19px; font-weight: 700; }
+.cf-body { font-size: 15px; line-height: 1.45; color: var(--gx-ink-2); }
+.cf-buttons { display: flex; gap: 8px; margin-top: 8px; }
+.cf-buttons button { flex: 1; height: 48px; border-radius: 14px; font-size: 16px; white-space: nowrap; }
+.cf-cancel { background: var(--gx-button); box-shadow: inset 0 0 0 1px var(--gx-button-line); color: var(--gx-ink); font-weight: 600; }
+.cf-undo { background: var(--gx-undo-ground); box-shadow: inset 0 0 0 1px var(--gx-undo-line); color: var(--gx-warn); font-weight: 700; }
 
 /* ---- Internet radio (ADR-0180, design/source/31 §7, C01-C06) ---- */
 .views { position: relative; display: flex; height: 40px; padding: 3px; box-sizing: border-box; border-radius: 20px;
@@ -656,6 +828,10 @@ class GexisPlayerCard extends HTMLElement {
     this._menu = false;
     this._dpadOpen = false;
     this._eqOpen = false;        // the full form's EQ sheet
+    this._groupOpen = false;     // the full form's group volume sheet
+    this._undoAsk = false;       // *Undo the group?* asked
+    this._joining = new Map();   // players joined from here, not yet in the group: entity -> when
+    this._entering = null;       // the leader of another group asked to take the player shown
     this._sent = null;           // { text, until }
     this._drag = null;           // the volume while a finger is on it
     this._tab = 'now';           // the view chosen on this card: now or radio (ADR-0180)
@@ -787,6 +963,15 @@ class GexisPlayerCard extends HTMLElement {
      * title, and once is enough (the phone's H17). */
     const title = active ? (a.media_title || (kind && kind !== 'other' ? SOURCES[kind].name : a.source) || 'Playing') : 'Nothing playing';
     const byStation = station ? [a.media_artist, a.media_album_name !== title ? a.media_album_name : null].filter(Boolean).join(' · ') : null;
+    /* The group (ADR-0166): a player joined from here is *Joining* until it
+     * is in it (a minute at most); another group asked to take this one,
+     * until this one is in a group. */
+    const group = unreachable ? null : groupOf(st);
+    const now0 = Date.now();
+    for (const [j, at] of this._joining) {
+      if (now0 - at > 60000 || group?.members.some((m) => m.entity_id === j)) this._joining.delete(j);
+    }
+    if (group) this._entering = null;
     return {
       id, ids, st, a, unreachable, active, kind, art, duration, hasPos, radio, station,
       tab: radio && this._tab === 'radio' ? 'radio' : 'now',
@@ -812,12 +997,15 @@ class GexisPlayerCard extends HTMLElement {
       views,
       dpad: hasDpad,
       sib, usable,
+      group,
+      canGroup: has(F.GROUPING),
     };
   }
 
   _render() {
     if (!this._hass || this._drag !== null || this._seeking) return;
     const v = this._view();
+    if (!v || !v.group) { this._groupOpen = false; this._undoAsk = false; }
     if (v && v.tab === 'radio') this._askRadio(v);
     const html = v ? this._markup(v) : '<div class="root"><div class="unreachable"><div><div class="t">No Gexis player</div><div class="n">Add a player under Settings → Devices &amp; services.</div></div></div></div>';
     if (html === this._html) { this._tickPosition(); return; }
@@ -928,6 +1116,7 @@ class GexisPlayerCard extends HTMLElement {
       h += v.tab === 'radio' ? this._radioCompact(v) : this._compact(v, src);
     }
     if (this._menu && multi) h += this._switcherMenu(v);
+    if (this._undoAsk && v.group) h += this._undoConfirm(v);
     return h + '</div>';
   }
 
@@ -1069,6 +1258,8 @@ class GexisPlayerCard extends HTMLElement {
     }
     if (this._menu && multi) h += this._switcherMenu(v, true);
     if (this._eqOpen && v.eq && !v.unreachable && v.tab === 'now') h += this._eqSheet(v);
+    if (this._groupOpen && v.group && v.tab === 'now') h += this._groupSheet(v);
+    if (this._undoAsk && v.group) h += this._undoConfirm(v);
     return h + '</div>';
   }
 
@@ -1116,6 +1307,7 @@ class GexisPlayerCard extends HTMLElement {
       <div class="rm-side${v.station ? ' radio' : ''}"><div class="rm-text"><span class="rm-title${v.active ? '' : ' none'}">${esc(v.title)}</span>
         ${v.active && v.artist ? `<span class="rm-artist${v.station ? ' station' : ''}">${esc(v.artist)}</span>` : ''}</div>
         ${this._rmTransport(v, false)}</div></div>`;
+    h += this._groupMark(v);
     h += `<div class="rm-progress${v.active ? '' : ' idle'}" data-gexis-card="position">
       <div class="rm-pbar${v.active && !v.hasPos ? ' live' : ''}">${v.hasPos ? '<div class="rm-pfill" data-pos-fill></div>' : ''}</div>${this._rmTimes(v)}</div>`;
     if (v.dpad || v.buttons) h += this._rmTouch(v);
@@ -1134,7 +1326,7 @@ class GexisPlayerCard extends HTMLElement {
           <span class="rm-strack${v.active && !v.hasPos ? ' live' : ''}">${v.hasPos ? '<span class="rm-pfill" data-pos-fill></span>' : ''}</span>
           ${can ? '<span class="rm-sknob" data-pos-knob></span>' : ''}</div>
         ${this._rmTimes(v)}</div>
-      ${this._rmTransport(v, true)}${this._rmVolume(v)}`;
+      ${this._groupMark(v)}${this._rmTransport(v, true)}${this._rmVolume(v)}`;
   }
 
   /* The D-pad alone (ADR-0163 15); the corners are the remote's. */
@@ -1176,6 +1368,7 @@ class GexisPlayerCard extends HTMLElement {
    * Fixed volume the panel's locked row, mute where the output has a control
    * (ADR-0165). */
   _rmVolume(v) {
+    if (v.group) return this._rmGroupVolume(v);
     const eq = v.eq;
     const label = (cls) => `<span class="${cls}${eq.on ? ' lit' : ''}"><span class="rm-eqw">EQ</span><span class="rm-eqn">${esc(eq.label)}</span></span>`;
     const mute = (extra) => `<button class="rm-mute${extra}" data-act="mute" aria-label="${v.muted ? 'Unmute' : 'Mute'}" aria-pressed="${v.muted}">${svg(v.muted ? P.muted : P.volume, 24)}</button>`;
@@ -1193,6 +1386,87 @@ class GexisPlayerCard extends HTMLElement {
     }
     const button = eq ? `<button class="rm-eqbtn${eq.on ? ' on' : ''}" data-act="eq" aria-label="Equaliser">${EQ_ICON}</button>` : '';
     return `<div class="rm-row" data-gexis-card="volume">${row}${button}</div>`;
+  }
+
+  /* **Grouped, the bar is the group's** (the phone's VolumeRow, design/source/22
+   * 2a): *GROUP* and the count in its middle, its mute the group's, the group
+   * button left of EQ opening the group volume sheet. Every member Fixed: the
+   * bar reads Fixed and does not move. */
+  _rmGroupVolume(v) {
+    const g = v.group;
+    const eq = v.eq;
+    const still = !variableMembers(g).length;
+    const shown = still ? 0 : (g.level ?? 0);
+    const muted = g.muted;
+    const cap = (cls, extra = '') => `<span class="${cls}"${extra}><span class="rm-eqw">GROUP</span><span class="rm-eqn">${g.members.length}</span></span>`;
+    const row = `<div class="rm-vol${still ? ' still' : ''}" ${still ? '' : 'data-rmvol data-group'} role="slider" tabindex="0" aria-label="Group volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${muted ? 0 : shown}">
+        <span class="rm-fill${muted ? ' muted' : ''}" style="width:${shown}%"></span>
+        ${cap('rm-eq gcap')}${!muted ? cap('rm-eq dark', ` data-dark style="clip-path:inset(0 ${100 - shown}% 0 0)" aria-hidden="true"`) : ''}
+        <button class="rm-mute${!muted && shown > 14 ? ' dark' : ''}" data-act="gmute" aria-label="${muted ? 'Unmute the group' : 'Mute the group'}" aria-pressed="${muted}">${svg(muted ? P.muted : P.volume, 24)}</button>
+        <span class="rm-level${!muted && shown > 86 ? ' dark' : ''}">${still ? 'Fixed' : muted ? 'Off' : shown}</span></div>`;
+    const group = `<button class="rm-gbtn" data-act="gsheet" aria-label="Group volume">${GROUP_GLYPH(22)}</button>`;
+    const button = eq ? `<button class="rm-eqbtn${eq.on ? ' on' : ''}" data-act="eq" aria-label="Equaliser">${EQ_ICON}</button>` : '';
+    return `<div class="rm-row" data-gexis-card="volume">${row}${group}${button}</div>`;
+  }
+
+  /* The grouped mark (3a): the glyph and *with Kitchen, Study*; a tap opens
+   * the player list, where the group is. */
+  _groupMark(v) {
+    if (!v.group) return '';
+    const [text, more] = withText(v.group);
+    return `<div class="rm-gmark" data-gexis-card="group-mark"><button data-act="menu" aria-label="Grouped ${esc(text + more)}">${GROUP_GLYPH(16)}<span class="with">${esc(text)}</span>${more ? `<span class="more">${esc(more)}</span>` : ''}</button></div>`;
+  }
+
+  /* **Group volume** (the phone's GroupSheet): the *All* slider, a rule, each
+   * member's own row - a slider with its mute, the locked row for a Fixed one
+   * (its mute where its output has one), *Not reachable* for one that is off
+   * - and the note naming the Fixed ones. A member Home Assistant does not
+   * know is shown and cannot be moved from here. */
+  _groupSheet(v) {
+    const g = v.group;
+    const still = !variableMembers(g).length;
+    const level = still ? 0 : (g.level ?? 0);
+    const muted = g.muted;
+    const all = `<div class="gs-all"><span class="gs-alln">All</span>
+      <div class="rm-vol gs-bar gs-allbar" ${still ? '' : 'data-rmvol data-gall'} role="slider" tabindex="0" aria-label="Group volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${muted ? 0 : level}">
+        <span class="rm-fill${muted ? ' muted' : ''}" style="width:${level}%"></span>
+        <span class="rm-level${!muted && level > 86 ? ' dark' : ''}">${still ? 'Fixed' : muted ? 'Off' : level}</span></div></div>`;
+    const rows = alphabetical(g.members).map((m) => {
+      const lead = m.leads && !g.silent;
+      const tag = !m.reachable ? 'Off' : lead ? 'Leads' : m.fixed ? 'Fixed' : m.me ? 'This one' : '';
+      const who = `<span class="gs-who"><span class="gs-name ellip">${esc(m.name)}</span>${tag ? `<span class="gs-tag${lead ? ' lead' : ''}">${tag}</span>` : ''}</span>`;
+      const ent = m.entity_id || '';
+      const mute = (on, cls) => `<button class="rm-mute${cls}" data-act="mmute" data-id="${esc(ent)}" data-muted="${on}" aria-label="${on ? `Unmute ${esc(m.name)}` : `Mute ${esc(m.name)}`}" aria-pressed="${on}" ${ent ? '' : 'disabled'}>${svg(on ? P.muted : P.volume, 24)}</button>`;
+      let ctl;
+      if (!m.reachable) ctl = '<span class="gs-off">Not reachable</span>';
+      else if (m.fixed) {
+        const fm = m.fixed_mute === true || m.fixed_mute === false ? m.fixed_mute : null;
+        ctl = `<div class="rm-fixed${fm !== null ? ' has-mute' : ''}" role="group" aria-label="${esc(m.name)}: Fixed output">${fm !== null ? mute(fm, ' fixed') : ''}
+          <span class="rm-lock" aria-hidden="true"><span></span><span></span></span><span class="rm-fixed-t">Fixed output</span></div>`;
+      } else {
+        const lv = m.volume ?? 0;
+        ctl = `<div class="rm-vol gs-bar${ent ? '' : ' still'}" ${ent ? `data-rmvol data-member="${esc(ent)}" data-muted="${m.muted}"` : ''} data-level="${lv}" role="slider" tabindex="0" aria-label="${esc(m.name)} volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${m.muted ? 0 : lv}">
+          <span class="rm-fill${m.muted ? ' muted' : ''}" style="width:${lv}%"></span>${mute(m.muted, !m.muted && lv > 14 ? ' dark' : '')}
+          <span class="rm-level${!m.muted && lv > 86 ? ' dark' : ''}">${m.muted ? 'Off' : lv}</span></div>`;
+      }
+      return `<div class="gs-member">${who}${ctl}</div>`;
+    }).join('');
+    return `<div class="rm-scrim" data-act="gclose"></div>
+      <div class="rm-sheet gs" role="dialog" aria-label="Group volume" data-gexis-card="group-volume">
+        <button class="rm-handle" data-act="gclose" aria-label="Close"></button>
+        <div class="rm-head"><div class="rm-htext"><div class="rm-htitle">Group volume</div><div class="rm-hstate">${esc(levelsSub(g))}</div></div></div>
+        ${all}<div class="gs-rule"></div><div class="gs-rows">${rows}</div><div class="gs-note">${esc(fixedNote(g))}</div>
+      </div>`;
+  }
+
+  /* *Undo the group?* (the phone's UndoConfirm): it asks first. Undone by
+   * Home Assistant's unjoin of the player that leads (ADR-0166 B11). */
+  _undoConfirm(v) {
+    return `<div class="cf-scrim" data-act="gundono"></div>
+      <div class="cf" role="alertdialog" aria-label="Undo the group?" data-gexis-card="undo-group">
+        <div class="cf-title">Undo the group?</div><div class="cf-body">${esc(undoBody(v.group))}</div>
+        <div class="cf-buttons"><button class="cf-cancel" data-act="gundono">Cancel</button><button class="cf-undo" data-act="gundoyes">Undo group</button></div>
+      </div>`;
   }
 
   /* The switch and the settings, presets then the owner's after a rule,
@@ -1247,18 +1521,99 @@ class GexisPlayerCard extends HTMLElement {
     return h + '</div>';
   }
 
+  /* **The player list, grouped as the phone's** (design/source/22 1a; ADR-0166
+   * decision 11): the shown player's group as a block - its players, the
+   * leader tagged, Remove, Leave group, Undo group - another group as a
+   * block of its own, joined whole, and every other player with Join. A row
+   * switches the card to that player; its button is its own target. The
+   * list keeps the card's order, a group where its first player falls. */
   _switcherMenu(v, rm = false) {
-    const rows = v.ids.map((id) => {
-      const st = this._hass.states[id];
-      const cur = id === v.id;
-      const off = !st || st.state === 'unavailable';
-      return `<button role="option" aria-selected="${cur}" class="${cur ? 'current' : ''} hov" data-act="pick" data-id="${esc(id)}">
-        <img class="mark" src="${MARK}" alt="" style="opacity:${off ? 0.45 : 1}">
-        <div class="who"><span class="n ellip">${esc(playerName(this._hass, id))}</span><span class="s ellip">${esc(stateLine(st))}</span></div>
-        ${cur ? svg(P.check, 22, 'class="tick"') : ''}</button>`;
-    }).join('');
+    const hass = this._hass;
+    const mine = v.group;
+    const seen = new Set();
+    let rows = '';
+    for (const id of v.ids) {
+      if (seen.has(id)) continue;
+      if (mine && (id === v.id || mine.members.some((m) => m.entity_id === id))) {
+        rows += this._myGroup(v, mine);
+        seen.add(v.id);
+        mine.members.forEach((m) => m.entity_id && seen.add(m.entity_id));
+        continue;
+      }
+      /* Another player's group; one that still names the player shown,
+       * read before it left, is no group of another's. */
+      const og = id !== v.id ? groupOf(hass.states[id]) : null;
+      if (og && og.members.length > 1 && !og.members.some((m) => m.entity_id === v.id)) {
+        rows += this._otherGroup(v, og);
+        og.members.forEach((m) => m.entity_id && seen.add(m.entity_id));
+        seen.add(id);
+        continue;
+      }
+      rows += this._playerRow(v, id);
+      seen.add(id);
+    }
     return `<div class="${rm ? 'rm-menu-veil' : 'menu-veil'}" data-act="close"></div>
       <div class="menu${rm ? ' rm-menu' : ''}" data-gexis-card="switcher-menu" role="listbox" aria-label="Gexis players"><div class="label">Gexis players</div>${rows}</div>`;
+  }
+
+  /* One row: the mark, the name (the leader tagged), what it does; the row
+   * switches the card to the player, a button beside it is its own. */
+  _row(id, name, status, o = {}) {
+    const inner = `<img class="mark" src="${MARK}" alt="">
+      <span class="who"><span class="n ellip">${esc(name)}${o.leads ? `<span class="leads">Leads</span>` : ''}</span>${status ? `<span class="s ellip${o.joining ? ' joining' : ''}${o.quiet ? ' quiet' : ''}">${esc(status)}</span>` : ''}</span>
+      ${o.current ? svg(P.check, 22, 'class="tick"') : ''}`;
+    const cls = `mrow${o.member ? ' member' : ''}${o.current ? ' current' : ''}${o.off ? ' off' : ''}`;
+    const main = id && !o.current
+      ? `<button class="pick hov" role="option" aria-selected="false" data-act="pick" data-id="${esc(id)}">${inner}</button>`
+      : `<div class="pick" role="option" aria-selected="${!!o.current}">${inner}</div>`;
+    return `<div class="${cls}">${main}${o.act || ''}</div>`;
+  }
+
+  _myGroup(v, g) {
+    const leading = !!g.members.find((m) => m.me)?.leads;
+    const leader = g.members.find((m) => m.leads);
+    const rows = alphabetical(g.members).map((m) => this._row(m.me ? v.id : m.entity_id, m.name, memberStatus(g, m), {
+      member: true, current: m.me, off: !m.reachable, quiet: !m.reachable, joining: m.joining && m.reachable,
+      leads: m.leads && !g.silent,
+      act: !m.me && m.reachable && !m.leads && m.entity_id
+        ? `<button class="act" data-act="gremove" data-id="${esc(m.entity_id)}" aria-label="Remove ${esc(m.name)}">Remove</button>` : '',
+    })).join('');
+    const leave = leading ? '' : '<button class="wide" data-act="gleave">Leave group</button>';
+    const undo = leader?.entity_id ? '<button class="wide undo" data-act="gundo">Undo group</button>' : '';
+    return `<div class="grp" data-gexis-card="group">
+      <div class="grp-head">${GROUP_GLYPH(20)}<span class="who"><span class="grp-title ellip">${esc(groupHead(g))}</span><span class="s ellip">${esc(groupSub(g))}</span></span></div>
+      ${rows}${g.silent ? `<div class="grp-note">${esc(silentNote(g))}</div>` : ''}
+      ${leave || undo ? `<div class="grp-buttons">${leave}${undo}</div>` : ''}</div>`;
+  }
+
+  /* Another group (decision 11): its players together, what its leader
+   * plays, and, for a player in no group, *Join this group*. */
+  _otherGroup(v, og) {
+    const members = alphabetical(og.members);
+    const leader = og.members.find((m) => m.leads);
+    const status = !leader || !leader.reachable ? 'Its leader is off' : plays(og.transport, og.source);
+    const rows = members.map((m) => this._row(m.entity_id, m.name, m.reachable ? '' : 'Not reachable', {
+      member: true, off: !m.reachable, quiet: true, leads: m.leads && m.reachable,
+    })).join('');
+    const entering = !!leader?.entity_id && this._entering === leader.entity_id;
+    const can = !v.group && v.canGroup && !!leader?.entity_id && leader.reachable;
+    return `<div class="grp other" data-gexis-card="other-group">
+      <div class="grp-head">${GROUP_GLYPH(20)}<span class="who"><span class="grp-title ellip">${esc(joinNames(members.map((m) => m.name)))}</span><span class="s ellip">${esc(status)}</span></span></div>
+      ${rows}${can ? `<div class="grp-buttons"><button class="wide join" data-act="genter" data-id="${esc(leader.entity_id)}" ${entering ? 'disabled' : ''}>${entering ? 'Joining · catching up' : 'Join this group'}</button></div>` : ''}</div>`;
+  }
+
+  /* A player on its own: what it plays, and Join where both can group. */
+  _playerRow(v, id) {
+    const st = this._hass.states[id];
+    const current = id === v.id;
+    const off = !st || st.state === 'unavailable' || st.state === 'unknown';
+    const groups = ((Number(st?.attributes?.supported_features) || 0) & F.GROUPING) !== 0;
+    const joining = !current && this._joining.has(id);
+    let status = joining ? 'Joining · catching up' : stateLine(st);
+    if (!current && !off && !joining && v.canGroup && !groups) status += ' · Update to join';
+    const act = !current && !off && !joining && groups && v.canGroup
+      ? `<button class="act join" data-act="gjoin" data-id="${esc(id)}" aria-label="Join ${esc(playerName(this._hass, id))}">Join</button>` : '';
+    return this._row(id, playerName(this._hass, id), status, { current, off, joining, act });
   }
 
   /* ---- the position, moved every second without a redraw ---- */
@@ -1320,7 +1675,11 @@ class GexisPlayerCard extends HTMLElement {
     if (!el || el.disabled) return;
     const v = this._v;
     const act = el.dataset.act;
-    if (act === 'menu') { this._menu = !this._menu; this._eqOpen = false; this._html = ''; this._render(); return; }
+    if (act === 'menu') { this._menu = !this._menu; this._eqOpen = false; this._groupOpen = false; this._html = ''; this._render(); return; }
+    if (act === 'gsheet') { this._groupOpen = true; this._menu = false; this._eqOpen = false; this._html = ''; this._render(); return; }
+    if (act === 'gclose') { this._groupOpen = false; this._html = ''; this._render(); return; }
+    if (act === 'gundo') { this._undoAsk = true; this._menu = false; this._html = ''; this._render(); return; }
+    if (act === 'gundono') { this._undoAsk = false; this._html = ''; this._render(); return; }
     if (act === 'eq') { this._eqOpen = true; this._menu = false; this._html = ''; this._render(); return; }
     if (act === 'eqclose') { this._eqOpen = false; this._html = ''; this._render(); return; }
     if (act === 'close') { this._menu = false; this._html = ''; this._render(); return; }
@@ -1329,6 +1688,41 @@ class GexisPlayerCard extends HTMLElement {
     if (act === 'tab') { this._tab = el.dataset.key; this._radioSeen = null; this._menu = false; this._eqOpen = false; this._render(); return; }
     if (!v) return;
     const id = { entity_id: v.id };
+    /* The group (ADR-0166) through Home Assistant's own join and unjoin, and
+     * the integration's group volume and mute. */
+    if (act === 'gjoin') {
+      const other = el.dataset.id;
+      this._joining.set(other, Date.now());
+      this._html = '';
+      this._render();
+      this._call('media_player', 'join', { ...id, group_members: [other] })
+        .then((ok) => { if (!ok) { this._joining.delete(other); this._html = ''; this._render(); } });
+      return;
+    }
+    if (act === 'genter') {
+      const leader = el.dataset.id;
+      this._entering = leader;
+      this._html = '';
+      this._render();
+      this._call('media_player', 'join', { entity_id: leader, group_members: [v.id] })
+        .then((ok) => { if (!ok) { this._entering = null; this._html = ''; this._render(); } });
+      return;
+    }
+    if (act === 'gremove') { this._call('media_player', 'unjoin', { entity_id: el.dataset.id }); return; }
+    if (act === 'gleave') { this._call('media_player', 'unjoin', id); return; }
+    if (act === 'gundoyes') {
+      const leader = v.group?.members.find((m) => m.leads)?.entity_id;
+      this._undoAsk = false;
+      this._html = '';
+      this._render();
+      if (leader) this._call('media_player', 'unjoin', { entity_id: leader });
+      return;
+    }
+    if (act === 'gmute') { if (v.group) this._call('gexis', 'mute_group', { ...id, is_volume_muted: !v.group.muted }); return; }
+    if (act === 'mmute') {
+      if (el.dataset.id) this._call('media_player', 'volume_mute', { entity_id: el.dataset.id, is_volume_muted: el.dataset.muted !== 'true' });
+      return;
+    }
     if (act === 'station') this._call('media_player', 'play_media', { ...id, media_content_id: el.dataset.cid, media_content_type: 'channel' });
     else if (act === 'heart') {
       if (v.station) this._call('gexis', 'radio_favourite', { ...id, favourite: !v.station.favourite });
@@ -1363,12 +1757,17 @@ class GexisPlayerCard extends HTMLElement {
   }
 
   _onKey(e) {
-    if (e.key === 'Escape' && (this._menu || this._eqOpen)) { this._menu = false; this._eqOpen = false; this._html = ''; this._render(); return; }
+    if (e.key === 'Escape' && (this._menu || this._eqOpen || this._groupOpen || this._undoAsk)) {
+      this._menu = false; this._eqOpen = false; this._groupOpen = false; this._undoAsk = false; this._html = ''; this._render(); return;
+    }
     const vol = e.target.closest && e.target.closest('[data-vol], [data-rmvol]');
     if (vol && this._v && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
       e.preventDefault();
-      const level = Math.max(0, Math.min(100, this._v.level + (e.key === 'ArrowRight' ? 5 : -5)));
-      this._call('media_player', 'volume_set', { entity_id: this._v.id, volume_level: level / 100 });
+      const step = e.key === 'ArrowRight' ? 5 : -5;
+      const to = (now) => Math.max(0, Math.min(100, now + step)) / 100;
+      if ('group' in vol.dataset || 'gall' in vol.dataset) this._call('gexis', 'set_group_volume', { entity_id: this._v.id, volume_level: to(this._v.group?.level ?? 0) });
+      else if (vol.dataset.member) this._call('media_player', 'volume_set', { entity_id: vol.dataset.member, volume_level: to(Number(vol.dataset.level) || 0) });
+      else this._call('media_player', 'volume_set', { entity_id: this._v.id, volume_level: to(this._v.level) });
     }
   }
 
@@ -1437,12 +1836,20 @@ class GexisPlayerCard extends HTMLElement {
     bar.addEventListener('pointercancel', up);
   }
 
+  /* The player's bar, the group's (the row grouped, or *All* in the group's
+   * sheet) or a member's in that sheet. *All* moves the members' rows as the
+   * player will, and is one change when the finger lifts, so the members
+   * keep their balance; a muted member's bar unmutes it, as the phone's. */
   _rmDrag(e, bar) {
     const fill = bar.querySelector('.rm-fill');
     const dark = bar.querySelector('[data-dark]');
     const level = bar.querySelector('.rm-level');
     const mute = bar.querySelector('.rm-mute');
     const id = this._v.id;
+    const group = 'group' in bar.dataset || 'gall' in bar.dataset;
+    const member = bar.dataset.member;
+    const rows = 'gall' in bar.dataset ? [...this.shadowRoot.querySelectorAll('.gs-member [data-level]')] : [];
+    const from = rows.map((r) => Number(r.dataset.level) || 0);
     this._hold(e, bar, (f) => {
       const n = Math.round(f * 100);
       this._drag = n;
@@ -1452,11 +1859,23 @@ class GexisPlayerCard extends HTMLElement {
       level.textContent = n;
       level.classList.toggle('dark', n > 86);
       if (mute) mute.classList.toggle('dark', n > 14);
+      stepped(from, n).forEach((l, i) => {
+        const r = rows[i];
+        r.querySelector('.rm-fill').style.width = `${l}%`;
+        r.querySelector('.rm-fill').classList.remove('muted');
+        const t = r.querySelector('.rm-level');
+        t.textContent = l;
+        t.classList.toggle('dark', l > 86);
+      });
     }, () => {
       const n = this._drag;
       this._drag = null;
       this._html = '';
-      this._call('media_player', 'volume_set', { entity_id: id, volume_level: n / 100 });
+      if (group) this._call('gexis', 'set_group_volume', { entity_id: id, volume_level: n / 100 });
+      else if (member) {
+        if (bar.dataset.muted === 'true') this._call('media_player', 'volume_mute', { entity_id: member, is_volume_muted: false });
+        this._call('media_player', 'volume_set', { entity_id: member, volume_level: n / 100 });
+      } else this._call('media_player', 'volume_set', { entity_id: id, volume_level: n / 100 });
       this._render();
     });
   }
