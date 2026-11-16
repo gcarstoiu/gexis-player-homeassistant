@@ -2,8 +2,9 @@
 
 Each [Gexis Player](https://github.com/gcarstoiu/gexis-player) on the home
 network in Home Assistant, as a media player: what plays, with its artwork;
-play, pause, next and previous; volume and mute; the source playing; the
-equaliser, on or off, and its setting. On a player with a screen, four
+play, pause, next and previous; volume and mute; the source playing, internet
+radio's stations among them; grouping with other players; the equaliser, on
+or off, and its setting. On a player with a screen, four
 switches as well - the screen (display standby), the Home Assistant
 dashboard, the visualiser and the idle screen - three buttons (Home, Now
 playing and Lyrics), a D-pad, and actions that put a page of Home
@@ -14,7 +15,8 @@ And a card for dashboards, for every player in the home.
 
 - Home Assistant 2026.3 or later.
 - Gexis Player 1.5.0 or later (the D-pad 1.6.0 or later; the equaliser,
-  seeking and mute with Fixed volume 1.7.0 or later; pages 1.15.0 or later).
+  seeking and mute with Fixed volume 1.7.0 or later; grouping 1.8.0 or later;
+  pages 1.15.0 or later; internet radio 1.17.0 or later).
   An older player is found, and asked to update first.
 
 ## Installing
@@ -54,7 +56,7 @@ on a player without a screen.
 
 ## Internet radio
 
-On a Gexis Player with internet radio, switched on:
+On a Gexis Player 1.17.0 or later, with internet radio switched on:
 
 - **Its favourites are the media player's sources**, in the player's order:
   choosing one plays it, and a favourite playing is the source shown.
