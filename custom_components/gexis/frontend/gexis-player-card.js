@@ -789,13 +789,16 @@ button[disabled] { cursor: default; }
 .rm-transport.radio:not(.big) .rm-room { display: none; }
 /* A dashboard column (300): the row needs 208 beside a cover of at least 96,
  * so on a narrower card it goes under the cover and the title, the three
- * centred and the heart at the right. */
+ * centred and the heart at the right. **Every source** (2026-11-21): the
+ * music's three needed 176 beside the cover too, and Next ran off the card. */
 @container (max-width: 345px) {
-  .rm-now.radio { flex-wrap: wrap; row-gap: 12px; }
-  .rm-now.radio .rm-side { display: contents; }
-  .rm-now.radio .rm-text { flex: 1 1 0; min-width: 0; align-self: center; }
-  .rm-now.radio .rm-cover { width: 96px; }
-  .rm-now.radio .rm-transport { flex: 1 1 100%; justify-content: space-between; margin: 0; }
+  .rm-now { flex-wrap: wrap; row-gap: 12px; }
+  .rm-now .rm-side { display: contents; }
+  .rm-now .rm-text { flex: 1 1 0; min-width: 0; align-self: center; }
+  .rm-now .rm-cover { width: 96px; }
+  .rm-now .rm-transport { flex: 1 1 100%; margin: 0; }
+  .rm-now:not(.radio) .rm-transport { gap: 24px; }
+  .rm-now.radio .rm-transport { justify-content: space-between; }
   .rm-now.radio .rm-transport .rm-room { display: block; width: 44px; height: 44px; }
   .rm-now.radio .rm-transport .rm-heart { margin-left: 0; }
 }
